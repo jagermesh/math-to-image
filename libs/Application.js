@@ -148,6 +148,7 @@ function Application(configFile) {
       , format: formulaFormat
       , svg: true
       , linebreaks: true
+      , timeout: 1000
       }, function (data) {
         if (data.errors) {
           consoleLogRequestError(cacheKey, data.errors.join('; ') + ' (' + formulaFormat + ': ' + formula + ')');
