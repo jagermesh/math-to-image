@@ -189,7 +189,7 @@ function Application(configFile) {
       var query   = url.parse(request.url, true);
       var formula = query.query.latex || query.query.mathml || query.query.formula;
 
-      if (formula && (formula != '/?formula=4bc94d392d0289879e4ad6fa08b35c46&cw=3408&ch=800&cb=781&dpi=300')) {
+      if (formula && (formula != '4bc94d392d0289879e4ad6fa08b35c46')) {
         var formulaFormat = query.query.latex ? 'TeX' : 'MathML';
         var cacheKey = formulaFormat + ':' + md5(formula);
 
