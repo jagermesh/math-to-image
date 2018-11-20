@@ -178,6 +178,7 @@ function Application(configFile) {
       // not supported
       var result = html.replace(/\\textcolor{transparent}{}/g, '\\\\')
                        .replace(/\\textcolor{transparent}/g, '\\\\')
+                       .replace(/[^][{] [}]/g, '')
                        .replace(/#/g, '\\#');
 
       return result;
