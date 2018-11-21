@@ -173,7 +173,7 @@ function Application(configFile) {
 
     }
 
-    function cleanUpLatext(html) {
+    function cleanUpLatex(html) {
 
       // not supported
       var result = html.replace(/\\textcolor{transparent}{}/g, '\\\\')
@@ -226,7 +226,7 @@ function Application(configFile) {
               }
             } else {
               formula = cleanUpHtmlCharacters(formula);
-              formula = cleanUpLatext(formula);
+              formula = cleanUpLatex(formula);
               renderSvg(response, formulaFormat, formula, cacheKey);
             }
           }
