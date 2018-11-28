@@ -158,10 +158,12 @@ function Application(configFile) {
             consoleLogRequestInfo(cacheKey, 'Equation found in cache');
             returnImage(response, currentValue, cacheKey);
           } else {
-            equation = cleanUpHtmlCharacters(equation);
-            consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
-            equation = cleanUpLatex(equation);
-            consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
+            if (equationFormat == 'TeX') {
+              equation = cleanUpHtmlCharacters(equation);
+              consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
+              equation = cleanUpLatex(equation);
+              consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
+            }
             renderSvg(response, equationFormat, equation, cacheKey);
           }
         });
