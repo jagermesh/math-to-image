@@ -10,6 +10,7 @@ const parseDuration = require('parse-duration');
 const commander = require('commander');
 const fs = require('fs');
 const moment = require('moment');
+const querystring = require('querystring');
 
 const Cache = require('./../libs/Cache.js');
 
@@ -88,70 +89,27 @@ function Application(configFile) {
 
     }
 
-    function returnImage(response, formulaResponseBody, cacheKey) {
+    function returnImage(response, responseBody, cacheKey) {
 
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      response.write(formulaResponseBody);
+      response.write(responseBody);
       response.end();
 
       consoleLogRequestInfo(cacheKey, 'Request processed');
 
     }
 
-    const maxIterations = 25;
-
-    function download(url, cacheKey, callback, error, iteration = 1) {
-
-      if (iteration < maxIterations) {
-        consoleLogRequestInfo(cacheKey, 'Downloading: ' + url + ', iteration ' + iteration);
-        var formulaRequest = https.request(url, function(response) {
-          var responseBody = '';
-          response.setEncoding('utf8');
-          response.on('data', function(chunk) {
-            responseBody += chunk;
-          });
-          response.on('end', function() {
-            responseBody = responseBody.trim();
-            if (response.statusCode == 200) {
-              callback(responseBody);
-            } else
-            if (response.statusCode == 403) {
-              callback(false, responseBody);
-            } else
-            if (response.statusCode == 404) {
-              callback(false, responseBody);
-            } else {
-              consoleLogRequestError(cacheKey, response.statusCode + ' ' + responseBody + ' (' + url + ')');
-              setTimeout(function() {
-                download(url, cacheKey, callback, responseBody, iteration + 1);
-              }, 1000);
-            }
-          });
-        });
-        formulaRequest.on('error', function(error) {
-          consoleLogRequestError(cacheKey, error.toString() + ' (' + url + ')');
-          setTimeout(function() {
-            download(url, cacheKey, callback, error.toString(), iteration + 1);
-          }, 1000);
-        });
-        formulaRequest.end();
-      } else {
-        callback(false, error.toString());
-      }
-
-    }
-
-    function renderSvg(response, formulaFormat, formula, cacheKey) {
+    function renderSvg(response, equationFormat, equation, cacheKey) {
 
       mathjax.typeset({
-        math: formula
-      , format: formulaFormat
+        math: equation
+      , format: equationFormat
       , svg: true
       , linebreaks: true
       }, function (data) {
         if (data.errors) {
-          consoleLogRequestError(cacheKey, data.errors.join('; ') + ' (' + formulaFormat + ': ' + formula + ')');
-          returnError(response, formulaFormat + ': ' + formula + ': ' + data.errors.join('; '));
+          consoleLogRequestError(cacheKey, data.errors.join('; ') + ' (' + equationFormat + ': ' + equation + ')');
+          returnError(response, equationFormat + ': ' + equation + ': ' + data.errors.join('; '));
           response.end();
         } else {
           consoleLogRequestInfo(cacheKey, 'Rendered');
@@ -187,59 +145,53 @@ function Application(configFile) {
 
     }
 
-    server.on('request', function(request, response) {
+    function handleRequest(request, requestUrl, response, equationFormat, equation) {
 
-      var query   = url.parse(request.url, true);
-      var formula = query.query.latex || query.query.mathml || query.query.formula;
+      if (equation) {
+        var cacheKey = equationFormat + ':' + md5(equation);
 
-      if (formula && (formula != '4bc94d392d0289879e4ad6fa08b35c46')) {
-        var formulaFormat = query.query.latex ? 'TeX' : 'MathML';
-        var cacheKey = formulaFormat + ':' + md5(formula);
-
-        consoleLogRequestInfo(cacheKey, request.url.toString());
-        consoleLogRequestInfo(cacheKey, formulaFormat + ', original: ' + formula);
+        consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
+        consoleLogRequestInfo(cacheKey, equationFormat + ', original: ' + equation);
 
         _this.cache.get(cacheKey, function (currentValue) {
           if (currentValue) {
-            consoleLogRequestInfo(cacheKey, 'Found in cache');
+            consoleLogRequestInfo(cacheKey, 'Equation found in cache');
             returnImage(response, currentValue, cacheKey);
           } else {
-            if (query.query.formula) {
-              var formulaUrl = 'https://secure.edoctrina.org/uploads/wiris/formulas/' + formula.replace('.ini', '').replace('.png', '') + '.ini';
-              try {
-                download(formulaUrl, cacheKey, function(formulaResponseBody, error) {
-                  if (formulaResponseBody) {
-                    var parsedData = formulaResponseBody.match(/mml=(.+)/s);
-                    if (parsedData) {
-                      consoleLogRequestInfo(cacheKey, formulaFormat + ': ' + parsedData[1]);
-                      renderSvg(response, formulaFormat, parsedData[1], cacheKey);
-                    } else {
-                      consoleLogRequestError(cacheKey, 'Can not find formula' + ' (' + formulaResponseBody + ')');
-                      returnError(response, 'Can not find formula');
-                    }
-                  } else {
-                    consoleLogRequestError(cacheKey, error.toString() + ' (' + formulaUrl + ')');
-                    returnError(response, error.toString());
-                  }
-                });
-              } catch (error) {
-                consoleLogRequestError(cacheKey, error.toString() + ' (' + formulaUrl + ')');
-                returnError(response, error.toString());
-              }
-            } else {
-              formula = cleanUpHtmlCharacters(formula);
-              consoleLogRequestInfo(cacheKey, formulaFormat + ', cleanup1: ' + formula);
-              formula = cleanUpLatex(formula);
-              consoleLogRequestInfo(cacheKey, formulaFormat + ', cleanup2: ' + formula);
-              renderSvg(response, formulaFormat, formula, cacheKey);
-            }
+            equation = cleanUpHtmlCharacters(equation);
+            consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
+            equation = cleanUpLatex(equation);
+            consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
+            renderSvg(response, equationFormat, equation, cacheKey);
           }
         });
       } else {
         if ((request.url.toString().length > 0) && (request.url.toString() != '/favicon.ico') && (request.url.toString() != '/')) {
-          consoleLogError('Missing formula parameter' + ' (' + request.url.toString() + ')');
+          consoleLogError('Missing equation parameter' + ' (' + request.url.toString() + ')');
         }
-        returnError(response, 'Missing formula parameter');
+        returnError(response, 'Missing equation parameter');
+      }
+
+    }
+
+    server.on('request', function(request, response) {
+
+      if (request.method == 'POST') {
+        var body = '';
+        request.on('data', function(chunk) {
+          body += chunk.toString();
+        });
+        request.on('end', function() {
+          var query = querystring.parse(body);
+          var equationFormat = query.latex ? 'TeX' : 'MathML';
+          var equation = query.latex || query.mathml;
+          handleRequest(request, body, response, equationFormat, equation);
+        });
+      } else {
+        var query = url.parse(request.url, true);
+        var equationFormat = query.query.latex ? 'TeX' : 'MathML';
+        var equation = query.query.latex || query.query.mathml;
+        handleRequest(request, request.url.toString(), response, equationFormat, equation);
       }
 
     });
