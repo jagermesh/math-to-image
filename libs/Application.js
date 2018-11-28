@@ -176,9 +176,11 @@ function Application(configFile) {
     function cleanUpLatex(html) {
 
       // not supported
-      var result = html.replace(/\\textcolor{transparent}{}/g, '\\\\')
-                       .replace(/\\textcolor{transparent}/g, '\\\\')
-                       .replace(/[^][{] [}]/g, '')
+
+      var result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
+                       .replace(/\\textcolor\{transparent\}/g, '\\\\')
+                       .replace(/\\fra\{/g, '\\frac{')
+                       .replace(/\^\{ \}/g, '')
                        .replace(/#/g, '\\#');
 
       return result;
@@ -195,7 +197,7 @@ function Application(configFile) {
         var cacheKey = formulaFormat + ':' + md5(formula);
 
         consoleLogRequestInfo(cacheKey, request.url.toString());
-        consoleLogRequestInfo(cacheKey, formulaFormat + ': ' + formula);
+        consoleLogRequestInfo(cacheKey, formulaFormat + ', original: ' + formula);
 
         _this.cache.get(cacheKey, function (currentValue) {
           if (currentValue) {
@@ -226,7 +228,9 @@ function Application(configFile) {
               }
             } else {
               formula = cleanUpHtmlCharacters(formula);
+              consoleLogRequestInfo(cacheKey, formulaFormat + ', cleanup1: ' + formula);
               formula = cleanUpLatex(formula);
+              consoleLogRequestInfo(cacheKey, formulaFormat + ', cleanup2: ' + formula);
               renderSvg(response, formulaFormat, formula, cacheKey);
             }
           }
