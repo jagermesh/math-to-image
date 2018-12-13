@@ -139,6 +139,7 @@ function Application(configFile) {
                        .replace(/\\textcolor\{transparent\}/g, '\\\\')
                        .replace(/\\fra\{/g, '\\frac{')
                        .replace(/\^\{ \}/g, '')
+                       .replace(/([0-9])\^$/g, '$1^?')
                        .replace(/#/g, '\\#');
 
       return result;
