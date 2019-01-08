@@ -1,2 +1,5 @@
+.DS_Store
+package-lock.json
+run-forever.sh
 /node_modules
 /config

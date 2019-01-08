@@ -81,12 +81,13 @@ function Application(configFile) {
 
     }
 
-    function returnError(response, message, contentType = 'text/plain') {
+    function returnError(response, message, cacheKey, contentType = 'text/plain') {
 
       response.writeHead(400, { 'Content-Type': contentType });
       response.write(message);
       response.end();
 
+      consoleLogRequestError(cacheKey, message);
     }
 
     function returnImage(response, responseBody, cacheKey) {
@@ -109,7 +110,7 @@ function Application(configFile) {
       }, function (data) {
         if (data.errors) {
           consoleLogRequestError(cacheKey, data.errors.join('; ') + ' (' + equationFormat + ': ' + equation + ')');
-          returnError(response, equationFormat + ': ' + equation + ': ' + data.errors.join('; '));
+          returnError(response, equationFormat + ': ' + equation + ': ' + data.errors.join('; '), cacheKey);
           response.end();
         } else {
           consoleLogRequestInfo(cacheKey, 'Rendered');
@@ -165,14 +166,18 @@ function Application(configFile) {
               equation = cleanUpLatex(equation);
               consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
             }
-            renderSvg(response, equationFormat, equation, cacheKey);
+            if (/includegraphics/.test(equation)) {
+              returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
+            } else {
+              renderSvg(response, equationFormat, equation, cacheKey);
+            }
           }
         });
       } else {
         if ((request.url.toString().length > 0) && (request.url.toString() != '/favicon.ico') && (request.url.toString() != '/')) {
           consoleLogError('Missing equation parameter' + ' (' + request.url.toString() + ')');
         }
-        returnError(response, 'Missing equation parameter');
+        returnError(response, 'Missing equation parameter', 'emptyequation');
       }
 
     }
