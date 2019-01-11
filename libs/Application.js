@@ -147,10 +147,13 @@ function Application(configFile) {
 
     }
 
-    function handleRequest(request, requestUrl, response, equationFormat, equation) {
+    function handleRequest(request, requestUrl, response, equationFormat, equation, refid) {
 
       if (equation) {
         var cacheKey = equationFormat + ':' + md5(equation);
+        if (refid) {
+          cacheKey += ':' + refid;
+        }
 
         consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
         consoleLogRequestInfo(cacheKey, equationFormat + ', original: ' + equation);
@@ -193,13 +196,15 @@ function Application(configFile) {
           var query = querystring.parse(body);
           var equationFormat = query.latex ? 'TeX' : 'MathML';
           var equation = query.latex || query.mathml;
-          handleRequest(request, body, response, equationFormat, equation);
+          var refid = query.refid ? query.refid : '';
+          handleRequest(request, body, response, equationFormat, equation, refid);
         });
       } else {
         var query = url.parse(request.url, true);
         var equationFormat = query.query.latex ? 'TeX' : 'MathML';
         var equation = query.query.latex || query.query.mathml;
-        handleRequest(request, request.url.toString(), response, equationFormat, equation);
+        var refid = query.query.refid ? query.query.refid : '';
+        handleRequest(request, request.url.toString(), response, equationFormat, equation, refid);
       }
 
     });
