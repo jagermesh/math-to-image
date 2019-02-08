@@ -45,7 +45,7 @@ function Application(configFile) {
     mathjax.config({
       MathJax: {
         MathML: {
-         extensions: ["mml3.js"]
+         extensions: ['mml3.js']
         }
       }
     });
@@ -93,6 +93,7 @@ function Application(configFile) {
     function returnImage(response, responseBody, cacheKey) {
 
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      // response.writeHead(200, { 'Content-Type': 'image/png' });
       response.write(responseBody);
       response.end();
 
@@ -100,12 +101,12 @@ function Application(configFile) {
 
     }
 
-    function renderSvg(response, equationFormat, equation, cacheKey) {
+    function renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
 
       mathjax.typeset({
         math: equation
       , format: equationFormat
-      , svg: true
+      , svg: true //(imageFormat ? false : true)
       , linebreaks: true
       }, function (data) {
         if (data.errors) {
@@ -115,7 +116,13 @@ function Application(configFile) {
         } else {
           consoleLogRequestInfo(cacheKey, 'Rendered');
           _this.cache.set(cacheKey, data.svg);
-          returnImage(response, data.svg, cacheKey);
+          if (width !== null) {
+            data.svg = data.svg.replace(/(<svg[^>]+width=")[^"]+/, '$1' + width + 'px');
+          }
+          if (height !== null) {
+            data.svg = data.svg.replace(/(<svg[^>]+height=")[^"]+/, '$1' + height + 'px');
+          }
+          returnImage(response, data.svg, cacheKey, imageFormat);
         }
       });
 
@@ -147,13 +154,24 @@ function Application(configFile) {
 
     }
 
-    function handleRequest(request, requestUrl, response, equationFormat, equation, refid) {
+    function handleRequest(request, response, requestUrl, query) {
+
+      var equationFormat = query.latex ? 'TeX' : 'MathML';
+      var equation       = query.latex || query.mathml;
+      var refid          = query.refid ? query.refid : '';
+      var imageFormat    = query.imageFormat ? query.imageFormat : '';
+      var width          = query.width ? query.width : null;
+      var height         = query.height ? query.height : null;
 
       if (equation) {
         var cacheKey = equationFormat + ':' + md5(equation);
         if (refid) {
           cacheKey += ':' + refid;
         }
+        if (imageFormat) {
+          cacheKey += ':' + imageFormat;
+        }
+        cacheKey += Math.random();
 
         consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
         consoleLogRequestInfo(cacheKey, equationFormat + ', original: ' + equation);
@@ -172,7 +190,7 @@ function Application(configFile) {
             if (/includegraphics/.test(equation)) {
               returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
             } else {
-              renderSvg(response, equationFormat, equation, cacheKey);
+              renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height);
             }
           }
         });
@@ -194,17 +212,11 @@ function Application(configFile) {
         });
         request.on('end', function() {
           var query = querystring.parse(body);
-          var equationFormat = query.latex ? 'TeX' : 'MathML';
-          var equation = query.latex || query.mathml;
-          var refid = query.refid ? query.refid : '';
-          handleRequest(request, body, response, equationFormat, equation, refid);
+          handleRequest(request, response, body, query);
         });
       } else {
         var query = url.parse(request.url, true);
-        var equationFormat = query.query.latex ? 'TeX' : 'MathML';
-        var equation = query.query.latex || query.query.mathml;
-        var refid = query.query.refid ? query.query.refid : '';
-        handleRequest(request, request.url.toString(), response, equationFormat, equation, refid);
+        handleRequest(request, response, request.url.toString(), query.query);
       }
 
     });
