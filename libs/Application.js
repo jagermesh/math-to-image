@@ -93,7 +93,6 @@ function Application(configFile) {
     function returnImage(response, responseBody, cacheKey) {
 
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      // response.writeHead(200, { 'Content-Type': 'image/png' });
       response.write(responseBody);
       response.end();
 
@@ -171,7 +170,6 @@ function Application(configFile) {
         if (imageFormat) {
           cacheKey += ':' + imageFormat;
         }
-        cacheKey += Math.random();
 
         consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
         consoleLogRequestInfo(cacheKey, equationFormat + ', original: ' + equation);
