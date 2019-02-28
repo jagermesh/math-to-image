@@ -45,7 +45,7 @@ function Application(configFile) {
     mathjax.config({
       MathJax: {
         MathML: {
-         extensions: ['mml3.js']
+          extensions: ['mml3.js']
         }
       }
     });
@@ -90,38 +90,62 @@ function Application(configFile) {
       consoleLogRequestError(cacheKey, message);
     }
 
-    function returnImage(response, responseBody, cacheKey) {
+    function returnImage(response, responseBody, cacheKey, imageFormat) {
 
-      response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      response.write(responseBody);
+      if (imageFormat == 'png') {
+        response.writeHead(200, { 'Content-Type': 'image/png' });
+        response.write(Buffer.from(responseBody, 'base64'), 'binary');
+      } else {
+        response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+        response.write(responseBody);
+      }
       response.end();
 
       consoleLogRequestInfo(cacheKey, 'Request processed');
 
     }
 
+    function convertSvgToPng(data, renderSettings) {
+
+      const svg2png = require('svg2png');
+
+      var sourceBuffer = new Buffer.from(data.svg, 'utf-8');
+      var returnBuffer = svg2png.sync(sourceBuffer);
+      data.png = returnBuffer.toString('base64');
+
+      return data;
+
+    }
+
     function renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
 
-      mathjax.typeset({
+      var renderSettings = {
         math: equation
       , format: equationFormat
-      , svg: true //(imageFormat ? false : true)
+      , svg: true
       , linebreaks: true
-      }, function (data) {
+      };
+      mathjax.typeset(renderSettings, function (data) {
         if (data.errors) {
           consoleLogRequestError(cacheKey, data.errors.join('; ') + ' (' + equationFormat + ': ' + equation + ')');
           returnError(response, equationFormat + ': ' + equation + ': ' + data.errors.join('; '), cacheKey);
           response.end();
         } else {
           consoleLogRequestInfo(cacheKey, 'Rendered');
-          _this.cache.set(cacheKey, data.svg);
           if (width !== null) {
             data.svg = data.svg.replace(/(<svg[^>]+width=")[^"]+/, '$1' + width + 'px');
           }
           if (height !== null) {
             data.svg = data.svg.replace(/(<svg[^>]+height=")[^"]+/, '$1' + height + 'px');
           }
-          returnImage(response, data.svg, cacheKey, imageFormat);
+          if (imageFormat == 'png') {
+            data = convertSvgToPng(data, renderSettings);
+            _this.cache.set(cacheKey, data.png);
+            returnImage(response, data.png, cacheKey, imageFormat);
+          } else {
+            _this.cache.set(cacheKey, data.svg);
+            returnImage(response, data.svg, cacheKey, imageFormat);
+          }
         }
       });
 
@@ -170,6 +194,8 @@ function Application(configFile) {
         if (imageFormat) {
           cacheKey += ':' + imageFormat;
         }
+        cacheKey += '.3';
+        // cacheKey += Math.random();
 
         consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
         consoleLogRequestInfo(cacheKey, equationFormat + ', original: ' + equation);
@@ -177,7 +203,7 @@ function Application(configFile) {
         _this.cache.get(cacheKey, function (currentValue) {
           if (currentValue) {
             consoleLogRequestInfo(cacheKey, 'Equation found in cache');
-            returnImage(response, currentValue, cacheKey);
+            returnImage(response, currentValue, cacheKey, imageFormat);
           } else {
             if (equationFormat == 'TeX') {
               equation = cleanUpHtmlCharacters(equation);
