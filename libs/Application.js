@@ -170,11 +170,16 @@ function Application(configFile) {
       var result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
                        .replace(/\\textcolor\{transparent\}/g, '\\\\')
                        .replace(/\\fra\{/g, '\\frac{')
-                       .replace(/_\{_\{/g, '')
-                       .replace(/\}\}/g, '')
                        .replace(/\^\{ \}/g, '')
                        .replace(/([0-9])\^$/g, '$1^?')
                        .replace(/#/g, '\\#');
+
+      while(/_\{_\{_\{_\{_\{/.test(result)) {
+        result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
+      }
+      while(/\}\}\}\}\}/.test(result)) {
+        result = result.replace(/\}\}\}\}\}/g, '}}');
+      }
 
       return result;
 
@@ -200,7 +205,7 @@ function Application(configFile) {
         if (imageFormat) {
           cacheKey += ':' + imageFormat;
         }
-        cacheKey += '.3';
+        cacheKey += '.7';
         // cacheKey += Math.random();
 
         consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
