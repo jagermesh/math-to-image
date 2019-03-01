@@ -124,6 +124,7 @@ function Application(configFile) {
       , format: equationFormat
       , svg: true
       , linebreaks: true
+      // , timeout: 5
       };
       mathjax.typeset(renderSettings, function (data) {
         if (data.errors) {
@@ -169,6 +170,8 @@ function Application(configFile) {
       var result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
                        .replace(/\\textcolor\{transparent\}/g, '\\\\')
                        .replace(/\\fra\{/g, '\\frac{')
+                       .replace(/_\{_\{/g, '')
+                       .replace(/\}\}/g, '')
                        .replace(/\^\{ \}/g, '')
                        .replace(/([0-9])\^$/g, '$1^?')
                        .replace(/#/g, '\\#');
@@ -185,6 +188,9 @@ function Application(configFile) {
       var imageFormat    = query.imageFormat ? query.imageFormat : '';
       var width          = query.width ? query.width : null;
       var height         = query.height ? query.height : null;
+
+      // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315';
+      // equation = 'so';
 
       if (equation) {
         var cacheKey = equationFormat + ':' + md5(equation);
