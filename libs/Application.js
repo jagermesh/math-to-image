@@ -16,6 +16,8 @@ const Cache = require('./../libs/Cache.js');
 
 function Application(configFile) {
 
+  const API_KEY = 'fb499ad3-db31-430b-98ad-49db456b26a6';
+
   var _this = this;
 
   _this.configFile = configFile;
@@ -163,6 +165,17 @@ function Application(configFile) {
 
     }
 
+    function cleanUpMathML(mathml) {
+
+      if (!/mstyle mathsize/i.test(mathml)) {
+        mathml = mathml.replace(/(<math[^>]*?>)/, '$1<mstyle mathsize="16px">');
+        mathml = mathml.replace('</math>', '</mstyle></math>');
+      }
+
+      return mathml;
+
+    }
+
     function cleanUpLatex(html) {
 
       // not supported
@@ -205,7 +218,7 @@ function Application(configFile) {
         if (imageFormat) {
           cacheKey += ':' + imageFormat;
         }
-        cacheKey += '.7';
+        // cacheKey += '.7';
         // cacheKey += Math.random();
 
         consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
@@ -216,11 +229,17 @@ function Application(configFile) {
             consoleLogRequestInfo(cacheKey, 'Equation found in cache');
             returnImage(response, currentValue, cacheKey, imageFormat);
           } else {
-            if (equationFormat == 'TeX') {
-              equation = cleanUpHtmlCharacters(equation);
-              consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
-              equation = cleanUpLatex(equation);
-              consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
+            switch (equationFormat) {
+              case  'TeX':
+                equation = cleanUpHtmlCharacters(equation);
+                consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
+                equation = cleanUpLatex(equation);
+                consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
+                break;
+              case 'MathML':
+                equation = cleanUpMathML(equation);
+                consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
+                break;
             }
             if (/includegraphics/.test(equation)) {
               returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
