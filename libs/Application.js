@@ -187,12 +187,12 @@ function Application(configFile) {
                        .replace(/([0-9])\^$/g, '$1^?')
                        .replace(/#/g, '\\#');
 
-      while(/_\{_\{_\{_\{_\{/.test(result)) {
-        result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
-      }
-      while(/\}\}\}\}\}/.test(result)) {
-        result = result.replace(/\}\}\}\}\}/g, '}}');
-      }
+      // while(/_\{_\{_\{_\{_\{/.test(result)) {
+      //   result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
+      // }
+      // while(/\}\}\}\}\}/.test(result)) {
+      //   result = result.replace(/\}\}\}\}\}/g, '}}');
+      // }
 
       return result;
 
