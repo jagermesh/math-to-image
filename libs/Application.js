@@ -22,7 +22,7 @@ function Application(configFile) {
 
   _this.configFile = configFile;
 
-  _this.config = require(__dirname + '/../config/' + _this.configFile);
+  _this.config = require(_this.configFile);
 
   _this.cache = new Cache(_this, _this.config);
 
@@ -207,6 +207,7 @@ function Application(configFile) {
       var width          = query.width ? query.width : null;
       var height         = query.height ? query.height : null;
 
+      // equationFormat = 'TeX';
       // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315';
       // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315\\div3\\ aand\\ i\\ got\\ 3105\\ \\ so\\ in\\ one\\ month\\ they\\ eat\\ 3105';
       // equation = 'so';

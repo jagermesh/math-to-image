@@ -1,6 +1,7 @@
-const colors = require('colors');
+const colors    = require('colors');
 const commander = require('commander');
-const fs = require('fs');
+const fs        = require('fs');
+const path      = require('path');
 
 const Application = require('./libs/Application.js');
 
@@ -43,15 +44,19 @@ commander
 
 try {
   if (commander.config) {
-    var configFile = __dirname + '/config/' + commander.config;
+    var configFile = commander.config;
+    if (configFile.indexOf('/') == -1) {
+      configFile = 'config/' + configFile;
+    }
+    configFile = path.resolve(configFile);
     try {
       fs.statSync(configFile);
     } catch (error) {
-      throw 'Can not load configuration from ' + commander.config + ':\n  ' + error;
+      throw 'Can not load configuration from ' + configFile + ':\n  ' + error;
     }
     switch(commander.args[0]) {
       case 'start':
-        var application = new Application(commander.config);
+        var application = new Application(configFile);
         application.run();
         break;
       default:
