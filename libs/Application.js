@@ -85,7 +85,7 @@ function Application(configFile) {
 
     function returnError(response, message, cacheKey, contentType = 'text/plain') {
 
-      response.writeHead(400, { 'Content-Type': contentType });
+      response.writeHead(406, { 'Content-Type': contentType });
       response.write(message);
       response.end();
 
@@ -183,6 +183,8 @@ function Application(configFile) {
       var result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
                        .replace(/\\textcolor\{transparent\}/g, '\\\\')
                        .replace(/\\fra\{/g, '\\frac{')
+                       .replace(/\\pir[^]/g, '\\pi r^')
+                       .replace(/\\timesr[^]/g, '\\times r^')
                        .replace(/\^\{ \}/g, '')
                        .replace(/([0-9])\^$/g, '$1^?')
                        .replace(/#/g, '\\#');
