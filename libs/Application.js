@@ -185,6 +185,7 @@ function Application(configFile) {
                        .replace(/\\fra\{/g, '\\frac{')
                        .replace(/\\pir[^]/g, '\\pi r^')
                        .replace(/\\timesr[^]/g, '\\times r^')
+                       .replace(/\\timess[^]/g, '\\times s^')
                        .replace(/\^\{ \}/g, '')
                        .replace(/([0-9])\^$/g, '$1^?')
                        .replace(/#/g, '\\#');
