@@ -2,7 +2,7 @@
   "name": "math2image",
   "dependencies": {
     "colors": "^1.4.0",
-    "commander": "^2.20.3",
+    "commander": "^6.0.0",
     "mathjax-node": "^2.1.1",
     "md5": "^2.2.1",
     "moment": "^2.25.3",
