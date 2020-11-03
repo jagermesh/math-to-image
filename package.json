@@ -3,11 +3,14 @@
   "dependencies": {
     "colors": "^1.4.0",
     "commander": "^2.20.3",
-    "mathjax-node": "^2.1.1",
-    "md5": "^2.2.1",
+    "mathjax": "^3.1.2",
     "moment": "^2.25.3",
     "parse-duration": "^0.1.3",
     "redis": "^2.8.0",
-    "svg2png": "^4.1.1"
+    "sharp": "^0.26.2"
+  },
+  "scripts": {
+    "build": "npm install",
+    "update": "npm update"
   }
 }

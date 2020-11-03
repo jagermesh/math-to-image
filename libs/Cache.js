@@ -1,4 +1,4 @@
-const md5 = require('md5');
+const crypto = require('crypto');
 const redis = require("redis");
 const parseDuration = require('parse-duration');
 
@@ -33,7 +33,7 @@ function Cache(application, config) {
 
   function getKey(name) {
 
-    return AppId + ':' + md5(name);
+    return AppId + ':' + crypto.createHash('sha1').update(name, 'utf8').digest('hex');
 
   }
 

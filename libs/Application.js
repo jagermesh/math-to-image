@@ -1,24 +1,22 @@
 const path   = require('path');
 const colors = require('colors');
 const http = require('http');
-const https = require('https');
 const url = require('url');
-const mathjax = require('mathjax-node');
-const md5 = require('md5');
+const mathjax = require('mathjax');
+const crypto = require('crypto');
 const redis = require("redis");
-const parseDuration = require('parse-duration');
-const commander = require('commander');
 const fs = require('fs');
 const moment = require('moment');
 const querystring = require('querystring');
+const sharp = require('sharp');
 
-const Cache = require('./../libs/Cache.js');
+const Cache = require(`${__dirname}/Cache.js`);
 
 function Application(configFile) {
 
-  const API_KEY = 'fb499ad3-db31-430b-98ad-49db456b26a6';
+  const _this = this;
 
-  var _this = this;
+  const API_KEY = 'fb499ad3-db31-430b-98ad-49db456b26a6';
 
   _this.configFile = configFile;
 
@@ -27,272 +25,203 @@ function Application(configFile) {
   _this.cache = new Cache(_this, _this.config);
 
   _this.consoleLog = function(message) {
-
     if (message) {
-      console.log(colors.yellow(moment().format()) + ' ' + message.replace(/[\n\r]/g, ''));
+      console.log(`${colors.yellow(moment().format())} ${message.replace(/[\n\r]/g, '')}`);
     } else {
       console.log('');
     }
-
   };
 
   _this.consoleLogError = function(message) {
-
-    _this.consoleLog(colors.red('[ERROR]') + ' ' + message);
-
+    _this.consoleLog(`${colors.red('[ERROR]')} ${message}`);
   };
 
-  _this.run = function() {
+  _this.consoleLogRequestInfo = function(cacheKey, message) {
+    _this.consoleLog(colors.green(`[${cacheKey}] `) + message);
+  };
 
-    mathjax.config({
-      MathJax: {
-        MathML: {
-          extensions: ['mml3.js']
-        }
+  _this.consoleLogRequestError = function(cacheKey, message) {
+    _this.consoleLog(colors.green(`[${cacheKey}] `) + colors.red('[ERROR] ') + message);
+  };
+
+  _this.returnError = function(response, message, cacheKey, contentType = 'text/plain') {
+    response.writeHead(406, { 'Content-Type': contentType });
+    response.write(message);
+    response.end();
+
+    _this.consoleLogRequestError(cacheKey, message);
+  };
+
+  _this.returnImage = function(response, responseBody, cacheKey, imageFormat) {
+    if (imageFormat == 'png') {
+      response.writeHead(200, { 'Content-Type': 'image/png' });
+      response.write(responseBody, 'binary');
+    } else {
+      response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      response.write(responseBody);
+    }
+    response.end();
+
+    _this.consoleLogRequestInfo(cacheKey, 'Request processed');
+  };
+
+  _this.renderEquation = function(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
+    let normalizedEquation = equation.trim();
+    try {
+      let svgDom;
+      switch (equationFormat) {
+        case  'TeX':
+          svgDom = MathJax.tex2svg(normalizedEquation);
+          break;
+        case 'MathML':
+          svgDom = MathJax.mathml2svg(normalizedEquation);
+          break;
       }
-    });
-    mathjax.start();
-
-    const server = http.createServer();
-
-    function consoleLogError(message, cacheKey) {
-
-      consoleLog(colors.red('[ERROR] ') + message);
-
-    }
-
-    function consoleLogRequestInfo(cacheKey, message) {
-
-      consoleLog(colors.green('[' + cacheKey + '] ') + message);
-
-    }
-
-    function consoleLogRequestError(cacheKey, message) {
-
-      consoleLog(colors.green('[' + cacheKey + '] ') + colors.red('[ERROR] ') + message);
-
-    }
-
-    function consoleLog(message) {
-
-      if (message) {
-        console.log(colors.yellow(moment().format()) + ' ' + message.replace(/[\n\r]/g, ''));
-      } else {
-        console.log('');
-      }
-
-    }
-
-    function returnError(response, message, cacheKey, contentType = 'text/plain') {
-
-      response.writeHead(406, { 'Content-Type': contentType });
-      response.write(message);
-      response.end();
-
-      consoleLogRequestError(cacheKey, message);
-    }
-
-    function returnImage(response, responseBody, cacheKey, imageFormat) {
-
+      let svg = MathJax.startup.adaptor.innerHTML(svgDom);
+      svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
+      _this.consoleLogRequestInfo(cacheKey, 'Rendered');
       if (imageFormat == 'png') {
-        response.writeHead(200, { 'Content-Type': 'image/png' });
-        response.write(Buffer.from(responseBody, 'base64'), 'binary');
-      } else {
-        response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-        response.write(responseBody);
-      }
-      response.end();
-
-      consoleLogRequestInfo(cacheKey, 'Request processed');
-
-    }
-
-    function convertSvgToPng(data, renderSettings) {
-
-      const svg2png = require('svg2png');
-
-      var sourceBuffer = new Buffer.from(data.svg, 'utf-8');
-      var returnBuffer = svg2png.sync(sourceBuffer);
-      data.png = returnBuffer.toString('base64');
-
-      return data;
-
-    }
-
-    function renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
-
-      var renderSettings = {
-        math: equation
-      , format: equationFormat
-      , svg: true
-      , linebreaks: true
-      // , timeout: 5
-      };
-      mathjax.typeset(renderSettings, function (data) {
-        if (data.errors) {
-          consoleLogRequestError(cacheKey, data.errors.join('; ') + ' (' + equationFormat + ': ' + equation + ')');
-          returnError(response, equationFormat + ': ' + equation + ': ' + data.errors.join('; '), cacheKey);
-          response.end();
-        } else {
-          consoleLogRequestInfo(cacheKey, 'Rendered');
-          if (width !== null) {
-            data.svg = data.svg.replace(/(<svg[^>]+width=")[^"]+/, '$1' + width + 'px');
-          }
-          if (height !== null) {
-            data.svg = data.svg.replace(/(<svg[^>]+height=")[^"]+/, '$1' + height + 'px');
-          }
-          if (imageFormat == 'png') {
-            data = convertSvgToPng(data, renderSettings);
-            _this.cache.set(cacheKey, data.png);
-            returnImage(response, data.png, cacheKey, imageFormat);
+        sharp(Buffer.from(svg)).toFormat('png').toBuffer(function(error, png) {
+          if (error) {
+            _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
+            returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
           } else {
-            _this.cache.set(cacheKey, data.svg);
-            returnImage(response, data.svg, cacheKey, imageFormat);
+            _this.cache.set(cacheKey, png);
+            _this.returnImage(response, png, cacheKey, imageFormat);
           }
-        }
-      });
-
+        });
+      } else {
+        _this.cache.set(cacheKey, svg);
+        _this.returnImage(response, svg, cacheKey, imageFormat);
+      }
+    } catch (error) {
+      _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
+      _this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
     }
+  };
 
-    function cleanUpHtmlCharacters(html) {
-
-      var result = html.replace(/&gt;/g, '>')
+  _this.cleanUpHtmlCharacters = function(html) {
+    const result = html.replace(/&gt;/g, '>')
                        .replace(/&lt;/g, '<')
                        .replace(/&amp;/g, '&')
                        .replace(/&quot;/g, '"')
                        .replace(/&#039;/g, "'");
-      return result;
+    return result;
+  };
 
+  _this.cleanUpMathML = function(mathml) {
+    if (!/mstyle mathsize/i.test(mathml)) {
+      mathml = mathml.replace(/(<math[^>]*?>)/, '$1<mstyle mathsize="16px">');
+      mathml = mathml.replace('</math>', '</mstyle></math>');
     }
+    return mathml;
+  };
 
-    function cleanUpMathML(mathml) {
-
-      if (!/mstyle mathsize/i.test(mathml)) {
-        mathml = mathml.replace(/(<math[^>]*?>)/, '$1<mstyle mathsize="16px">');
-        mathml = mathml.replace('</math>', '</mstyle></math>');
-      }
-
-      return mathml;
-
+  _this.cleanUpLatex = function(html) {
+    // not supported
+    let result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
+                     .replace(/\\textcolor\{transparent\}/g, '\\\\')
+                     .replace(/\\fra\{/g, '\\frac{')
+                     .replace(/\\pir[^]/g, '\\pi r^')
+                     .replace(/\\timesr[^]/g, '\\times r^')
+                     .replace(/\\timess[^]/g, '\\times s^')
+                     .replace(/\^\{ \}/g, '')
+                     .replace(/([0-9])\^$/g, '$1^?')
+                     .replace(/#/g, '\\#');
+    while(/_\{_\{_\{_\{_\{/.test(result)) {
+      result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
     }
-
-    function cleanUpLatex(html) {
-
-      // not supported
-
-      var result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
-                       .replace(/\\textcolor\{transparent\}/g, '\\\\')
-                       .replace(/\\fra\{/g, '\\frac{')
-                       .replace(/\\pir[^]/g, '\\pi r^')
-                       .replace(/\\timesr[^]/g, '\\times r^')
-                       .replace(/\\timess[^]/g, '\\times s^')
-                       .replace(/\^\{ \}/g, '')
-                       .replace(/([0-9])\^$/g, '$1^?')
-                       .replace(/#/g, '\\#');
-
-      while(/_\{_\{_\{_\{_\{/.test(result)) {
-        result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
-      }
-      while(/\}\}\}\}\}/.test(result)) {
-        result = result.replace(/\}\}\}\}\}/g, '}}');
-      }
-
-      return result;
-
+    while(/\}\}\}\}\}/.test(result)) {
+      result = result.replace(/\}\}\}\}\}/g, '}}');
     }
+    return result;
+  };
 
-    function handleRequest(request, response, requestUrl, query) {
+  _this.handleRequest = function(request, response, requestUrl, query) {
+    const equationFormat = (query.format ? query.format : (query.latex ? 'TeX' : 'MathML'));
+    const refid = (query.refid ? query.refid : '');
+    const imageFormat = (query.imageFormat ? query.imageFormat : '');
+    const width = (query.width ? query.width : null);
+    const height = (query.height ? query.height : null);
+    const equation = (query.equation ? query.equation : (query.latex || query.mathml));
 
-      var equationFormat = query.latex ? 'TeX' : 'MathML';
-      var equation       = query.latex || query.mathml;
-      var refid          = query.refid ? query.refid : '';
-      var imageFormat    = query.imageFormat ? query.imageFormat : '';
-      var width          = query.width ? query.width : null;
-      var height         = query.height ? query.height : null;
+    // equationFormat = 'TeX';
+    // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315';
+    // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315\\div3\\ aand\\ i\\ got\\ 3105\\ \\ so\\ in\\ one\\ month\\ they\\ eat\\ 3105';
+    // equation = 'so';
 
-      // equationFormat = 'TeX';
-      // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315';
-      // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315\\div3\\ aand\\ i\\ got\\ 3105\\ \\ so\\ in\\ one\\ month\\ they\\ eat\\ 3105';
-      // equation = 'so';
+    if (equation) {
+      let hash = crypto.createHash('sha1').update(equation, 'utf8').digest('hex');
+      let cacheKey = `${equationFormat}:${hash}:${refid}:${imageFormat}`;
 
-      if (equation) {
-        var cacheKey = equationFormat + ':' + md5(equation);
-        if (refid) {
-          cacheKey += ':' + refid;
-        }
-        if (imageFormat) {
-          cacheKey += ':' + imageFormat;
-        }
-        // cacheKey += '.7';
-        // cacheKey += Math.random();
+      _this.consoleLogRequestInfo(cacheKey, `${request.method}: ${requestUrl}`);
+      _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, original: ${equation}`);
 
-        consoleLogRequestInfo(cacheKey, request.method + ': ' + requestUrl);
-        consoleLogRequestInfo(cacheKey, equationFormat + ', original: ' + equation);
+      _this.cache.get(cacheKey, function (currentValue) {
+        if (currentValue) {
+          _this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
+          _this.returnImage(response, currentValue, cacheKey, imageFormat);
+        } else {
+          let normalizedEquation = equation;
 
-        _this.cache.get(cacheKey, function (currentValue) {
-          if (currentValue) {
-            consoleLogRequestInfo(cacheKey, 'Equation found in cache');
-            returnImage(response, currentValue, cacheKey, imageFormat);
-          } else {
-            switch (equationFormat) {
-              case  'TeX':
-                equation = cleanUpHtmlCharacters(equation);
-                consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
-                equation = cleanUpLatex(equation);
-                consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup2: ' + equation);
-                break;
-              case 'MathML':
-                equation = cleanUpMathML(equation);
-                consoleLogRequestInfo(cacheKey, equationFormat + ', cleanup1: ' + equation);
-                break;
-            }
-            if (/includegraphics/.test(equation)) {
-              returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
-            } else {
-              renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height);
-            }
+          switch (equationFormat) {
+            case  'TeX':
+              normalizedEquation = _this.cleanUpHtmlCharacters(normalizedEquation);
+              normalizedEquation = _this.cleanUpLatex(normalizedEquation);
+              break;
+            case 'MathML':
+              normalizedEquation = _this.cleanUpMathML(normalizedEquation);
+              break;
           }
-        });
-      } else {
-        if ((request.url.toString().length > 0) && (request.url.toString() != '/favicon.ico') && (request.url.toString() != '/')) {
-          consoleLogError('Missing equation parameter' + ' (' + request.url.toString() + ')');
+          _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, cleanup: ${normalizedEquation}`);
+          if (/includegraphics/.test(normalizedEquation)) {
+            _this.returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
+          } else {
+            _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, imageFormat, width, height);
+          }
         }
-        returnError(response, 'Missing equation parameter', 'emptyequation');
+      });
+    } else {
+      if ((request.url.toString().length > 0) && (request.url.toString() != '/favicon.ico') && (request.url.toString() != '/')) {
+        _this.consoleLogError(`Missing "equation" parameter (${request.url.toString()})`);
       }
-
+      _this.returnError(response, 'Missing "equation" parameter', 'emptyequation');
     }
+  };
 
-    server.on('request', function(request, response) {
+  _this.run = async function() {
+    _this.MathJax = await require('mathjax').init({
+      loader: {
+        load: ['input/tex', 'input/mml', 'output/svg'],
+      },
+    });
 
+    _this.server = http.createServer();
+
+    _this.server.on('request', function(request, response) {
       if (request.method == 'POST') {
-        var body = '';
+        let body = '';
         request.on('data', function(chunk) {
           body += chunk.toString();
         });
         request.on('end', function() {
-          var query = querystring.parse(body);
-          handleRequest(request, response, body, query);
+          let query = querystring.parse(body);
+          _this.handleRequest(request, response, body, query);
         });
       } else {
-        var query = url.parse(request.url, true);
-        handleRequest(request, response, request.url.toString(), query.query);
+        let query = url.parse(request.url, true);
+        _this.handleRequest(request, response, request.url.toString(), query.query);
       }
-
     });
 
-    // server.on('error', function(e) {
-    //   console.error(`Got error: ${e.message}`);
-    // });
-
-    server.on('clientError', (err, socket) => {
+    _this.server.on('clientError', (err, socket) => {
       socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
     });
 
-    server.listen(_this.config.port);
+    _this.server.listen(_this.config.port);
 
-    consoleLog('Listening on port ' + _this.config.port);
-    consoleLog();
-
+    _this.consoleLog(`Listening on port ${_this.config.port}`);
+    _this.consoleLog();
   };
 
 }

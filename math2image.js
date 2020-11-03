@@ -1,7 +1,7 @@
-const colors    = require('colors');
+const colors = require('colors');
 const commander = require('commander');
-const fs        = require('fs');
-const path      = require('path');
+const fs = require('fs');
+const path = require('path');
 
 const Application = require('./libs/Application.js');
 
@@ -16,23 +16,21 @@ function showHelp() {
   console.log('Options:');
   console.log('  -c, --config ' + colors.yellow('Config file name'));
 
-  var max;
-
   console.log('');
   console.log('Available configs:');
-  var configs = [];
-  var files = fs.readdirSync(__dirname);
-  max = 0;
-  for(var i = 0; i < files.length; i++) {
+  let configs = [];
+  let files = fs.readdirSync(__dirname);
+  let max = 0;
+  for(let i = 0; i < files.length; i++) {
     if (/config.+?[.]js/.test(files[i])) {
-      var filename = __dirname + '/' + files[i];
-      var config = require(filename);
+      let filename = __dirname + '/' + files[i];
+      let config = require(filename);
       configs.push(files[i]);
       max = Math.max(max, ('  node server.js --config ' + files[i]).length);
     }
   }
 
-  for(var j = 0; j < configs.length; j++) {
+  for(let j = 0; j < configs.length; j++) {
     console.log(('  node server.js --config ' + configs[j]).padEnd(max, ' ') + ' ' + colors.yellow(configs[j]));
   }
 
@@ -44,7 +42,7 @@ commander
 
 try {
   if (commander.config) {
-    var configFile = commander.config;
+    let configFile = commander.config;
     if (configFile.indexOf('/') == -1) {
       configFile = 'config/' + configFile;
     }
@@ -56,7 +54,7 @@ try {
     }
     switch(commander.args[0]) {
       case 'start':
-        var application = new Application(configFile);
+        let application = new Application(configFile);
         application.run();
         break;
       default:
