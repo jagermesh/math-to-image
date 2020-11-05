@@ -1,4 +1,4 @@
-# System Watcher
+# Math To Image Service
 
 ## Setup
 
@@ -12,26 +12,13 @@ npm install --save math-to-image
 2) Create `math2image.js` with following code as an example
 
 ```javascript
-const MathToImage = require(__dirname + '/index.js');
+const MathToImage = require('math-to-image');
 
 let mathToImage = new MathToImage();
-
 mathToImage.start();
 ```
 
-3) Create `config.js` with following code as an example
-
-```javascript
-module.exports = {
-  port: 8000,
-  redis: {
-    lifespan: '30 min',
-    connectString: 'redis://localhost:6379',
-  },
-};;
-```
-
-4) Run the service
+3) Run the service
 
 ```shell
 node math2image.js start --config config.js
@@ -48,12 +35,11 @@ module.exports = {
   apps : [
     { name: 'Math2Image',
       script: 'math2image.js',
-      args: 'start --config config.js',
       instances: 1,
       autorestart: true,
       watch: true,
       watch_delay: 1000,
-      ignore_watch : ["node_modules", ".git", "config/.git"],
+      ignore_watch : ["node_modules", ".git"],
       max_memory_restart: '1G',
     }
   ]
