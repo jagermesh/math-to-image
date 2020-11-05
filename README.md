@@ -21,7 +21,7 @@ mathToImage.start();
 3) Run the service
 
 ```shell
-node math2image.js start --config config.js
+node math2image.js
 ```
 
 ## Run using pm2 [http://pm2.keymetrics.io](http://pm2.keymetrics.io).
