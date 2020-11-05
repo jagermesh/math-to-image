@@ -16,7 +16,7 @@ class Cache {
   constructor(application, config) {
     const _this = this;
 
-    _this.APP_ID = '13844a7e-deae-4f11-a291-59f3e1cb519b';
+    _this.APP_ID = '27af2f86-6d6c-4254-a6f1-694386ffc921';
     _this.config = Object.assign({ }, config);
 
     _this.cacheImpl = null;
@@ -120,58 +120,6 @@ class MathToImage {
     _this.consoleLogRequestError(cacheKey, message);
   }
 
-  returnImage(response, responseBody, cacheKey, imageFormat) {
-    const _this = this;
-
-    if (imageFormat == 'png') {
-      response.writeHead(200, { 'Content-Type': 'image/png' });
-      response.write(responseBody, 'binary');
-    } else {
-      response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-      response.write(responseBody);
-    }
-    response.end();
-
-    _this.consoleLogRequestInfo(cacheKey, 'Request processed');
-  }
-
-  renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
-    const _this = this;
-
-    let normalizedEquation = equation.trim();
-    try {
-      let svgDom;
-      switch (equationFormat) {
-        case  'TeX':
-          svgDom = _this.MathJax.tex2svg(normalizedEquation);
-          break;
-        case 'MathML':
-          svgDom = _this.MathJax.mathml2svg(normalizedEquation);
-          break;
-      }
-      let svg = _this.MathJax.startup.adaptor.innerHTML(svgDom);
-      svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
-      _this.consoleLogRequestInfo(cacheKey, 'Rendered');
-      if (imageFormat == 'png') {
-        sharp(Buffer.from(svg)).toFormat('png').toBuffer(function(error, png) {
-          if (error) {
-            _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
-            returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
-          } else {
-            _this.cache.set(cacheKey, png);
-            _this.returnImage(response, png, cacheKey, imageFormat);
-          }
-        });
-      } else {
-        _this.cache.set(cacheKey, svg);
-        _this.returnImage(response, svg, cacheKey, imageFormat);
-      }
-    } catch (error) {
-      _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
-      _this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
-    }
-  }
-
   cleanUpHtmlCharacters(html) {
     const _this = this;
 
@@ -215,6 +163,60 @@ class MathToImage {
     return result;
   }
 
+  returnImage(response, responseBody, cacheKey, imageFormat) {
+    const _this = this;
+
+    if (imageFormat == 'png') {
+      response.writeHead(200, { 'Content-Type': 'image/png' });
+      response.write(responseBody);
+    } else {
+      response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      response.write(responseBody);
+    }
+    response.end();
+
+    _this.consoleLogRequestInfo(cacheKey, 'Request processed');
+  }
+
+  renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
+    const _this = this;
+
+    let normalizedEquation = equation.trim();
+    try {
+      let svgDom;
+      switch (equationFormat) {
+        case  'TeX':
+          svgDom = _this.MathJax.tex2svg(normalizedEquation);
+          break;
+        case 'MathML':
+          svgDom = _this.MathJax.mathml2svg(normalizedEquation);
+          break;
+      }
+      let svg = _this.MathJax.startup.adaptor.innerHTML(svgDom);
+      svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
+      _this.consoleLogRequestInfo(cacheKey, 'Rendered');
+      if (imageFormat == 'png') {
+        sharp(Buffer.from(svg)).toFormat('png').toBuffer(function(error, png) {
+          if (error) {
+            _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
+            returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
+          } else {
+            _this.consoleLogRequestInfo(cacheKey, 'Saving result to cache');
+            _this.cache.set(cacheKey, png.toString('base64'));
+            _this.returnImage(response, png, cacheKey, imageFormat);
+          }
+        });
+      } else {
+        _this.consoleLogRequestInfo(cacheKey, 'Saving result to cache');
+        _this.cache.set(cacheKey, Buffer.from(svg).toString('base64'));
+        _this.returnImage(response, svg, cacheKey, imageFormat);
+      }
+    } catch (error) {
+      _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
+      _this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
+    }
+  }
+
   handleRequest(request, response, requestUrl, query) {
     const _this = this;
 
@@ -235,7 +237,8 @@ class MathToImage {
       _this.cache.get(cacheKey, function (currentValue) {
         if (currentValue) {
           _this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
-          _this.returnImage(response, currentValue, cacheKey, imageFormat);
+          const image = new Buffer(currentValue, 'base64');
+          _this.returnImage(response, image, cacheKey, imageFormat);
         } else {
           let normalizedEquation = equation;
 
