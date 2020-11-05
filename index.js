@@ -9,50 +9,120 @@ const fs = require('fs');
 const moment = require('moment');
 const querystring = require('querystring');
 const sharp = require('sharp');
+const parseDuration = require('parse-duration');
 
-const Cache = require(`${__dirname}/Cache.js`);
+class Cache {
 
-function Application(configFile) {
+  constructor(application, config) {
+    const _this = this;
 
-  const _this = this;
+    _this.APP_ID = '13844a7e-deae-4f11-a291-59f3e1cb519b';
+    _this.config = Object.assign({ }, config);
 
-  const API_KEY = 'fb499ad3-db31-430b-98ad-49db456b26a6';
+    _this.cacheImpl = null;
 
-  _this.configFile = configFile;
+    if (_this.config.redis) {
+      _this.config.redis.lifespanSeconds = parseDuration(_this.config.redis.lifespan) / 1000;
+      const redisClient = redis.createClient(_this.config.redis.connectString);
+      redisClient.on('error', function(error) {
+        application.consoleLogError(`Redis error: ${error.toString()}`);
+      });
+      redisClient.on('connect', function(error) {
+        _this.cacheImpl = redisClient;
+      });
+      redisClient.on('reconnecting', function(error) {
+        _this.cacheImpl = null;
+      });
+      redisClient.on('end', function(error) {
+        _this.cacheImpl = null;
+      });
+    }
+  }
 
-  _this.config = require(_this.configFile);
+  getKey(name) {
+    const _this = this;
 
-  _this.cache = new Cache(_this, _this.config);
+    const hash = crypto.createHash('sha1').update(name, 'utf8').digest('hex');
+    return `${_this.APP_ID}:${hash}`;
+  }
 
-  _this.consoleLog = function(message) {
+  get(name, callback) {
+    const _this = this;
+
+    if (_this.cacheImpl) {
+      try {
+        _this.cacheImpl.get(_this.getKey(name), function (error, value) {
+          callback(value);
+        });
+      } catch (error) {
+        callback(null);
+      }
+    } else {
+      callback(null);
+    }
+  }
+
+  set(name, value) {
+    const _this = this;
+
+    if (_this.cacheImpl) {
+      _this.cacheImpl.set(_this.getKey(name), value, 'EX', _this.config.redis.lifespanSeconds);
+    }
+  }
+
+}
+
+class MathToImage {
+
+  constructor(config) {
+    const _this = this;
+
+    _this.API_KEY = 'fb499ad3-db31-430b-98ad-49db456b26a6';
+    _this.config = Object.assign({ port: 8000 }, config);
+    _this.cache = new Cache(_this, _this.config);
+  }
+
+  consoleLog(message) {
+    const _this = this;
+
     if (message) {
       console.log(`${colors.yellow(moment().format())} ${message.replace(/[\n\r]/g, '')}`);
     } else {
       console.log('');
     }
-  };
+  }
 
-  _this.consoleLogError = function(message) {
+  consoleLogError(message) {
+    const _this = this;
+
     _this.consoleLog(`${colors.red('[ERROR]')} ${message}`);
-  };
+  }
 
-  _this.consoleLogRequestInfo = function(cacheKey, message) {
+  consoleLogRequestInfo(cacheKey, message) {
+    const _this = this;
+
     _this.consoleLog(colors.green(`[${cacheKey}] `) + message);
-  };
+  }
 
-  _this.consoleLogRequestError = function(cacheKey, message) {
+  consoleLogRequestError(cacheKey, message) {
+    const _this = this;
+
     _this.consoleLog(colors.green(`[${cacheKey}] `) + colors.red('[ERROR] ') + message);
-  };
+  }
 
-  _this.returnError = function(response, message, cacheKey, contentType = 'text/plain') {
+  returnError(response, message, cacheKey, contentType = 'text/plain') {
+    const _this = this;
+
     response.writeHead(406, { 'Content-Type': contentType });
     response.write(message);
     response.end();
 
     _this.consoleLogRequestError(cacheKey, message);
-  };
+  }
 
-  _this.returnImage = function(response, responseBody, cacheKey, imageFormat) {
+  returnImage(response, responseBody, cacheKey, imageFormat) {
+    const _this = this;
+
     if (imageFormat == 'png') {
       response.writeHead(200, { 'Content-Type': 'image/png' });
       response.write(responseBody, 'binary');
@@ -63,21 +133,23 @@ function Application(configFile) {
     response.end();
 
     _this.consoleLogRequestInfo(cacheKey, 'Request processed');
-  };
+  }
 
-  _this.renderEquation = function(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
+  renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
+    const _this = this;
+
     let normalizedEquation = equation.trim();
     try {
       let svgDom;
       switch (equationFormat) {
         case  'TeX':
-          svgDom = MathJax.tex2svg(normalizedEquation);
+          svgDom = _this.MathJax.tex2svg(normalizedEquation);
           break;
         case 'MathML':
-          svgDom = MathJax.mathml2svg(normalizedEquation);
+          svgDom = _this.MathJax.mathml2svg(normalizedEquation);
           break;
       }
-      let svg = MathJax.startup.adaptor.innerHTML(svgDom);
+      let svg = _this.MathJax.startup.adaptor.innerHTML(svgDom);
       svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
       _this.consoleLogRequestInfo(cacheKey, 'Rendered');
       if (imageFormat == 'png') {
@@ -98,36 +170,42 @@ function Application(configFile) {
       _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
       _this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
     }
-  };
+  }
 
-  _this.cleanUpHtmlCharacters = function(html) {
+  cleanUpHtmlCharacters(html) {
+    const _this = this;
+
     const result = html.replace(/&gt;/g, '>')
-                       .replace(/&lt;/g, '<')
-                       .replace(/&amp;/g, '&')
-                       .replace(/&quot;/g, '"')
-                       .replace(/&#039;/g, "'");
+      .replace(/&lt;/g, '<')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'");
     return result;
-  };
+  }
 
-  _this.cleanUpMathML = function(mathml) {
+  cleanUpMathML(mathml) {
+    const _this = this;
+
     if (!/mstyle mathsize/i.test(mathml)) {
       mathml = mathml.replace(/(<math[^>]*?>)/, '$1<mstyle mathsize="16px">');
       mathml = mathml.replace('</math>', '</mstyle></math>');
     }
     return mathml;
-  };
+  }
 
-  _this.cleanUpLatex = function(html) {
+  cleanUpLatex(html) {
+    const _this = this;
+
     // not supported
     let result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
-                     .replace(/\\textcolor\{transparent\}/g, '\\\\')
-                     .replace(/\\fra\{/g, '\\frac{')
-                     .replace(/\\pir[^]/g, '\\pi r^')
-                     .replace(/\\timesr[^]/g, '\\times r^')
-                     .replace(/\\timess[^]/g, '\\times s^')
-                     .replace(/\^\{ \}/g, '')
-                     .replace(/([0-9])\^$/g, '$1^?')
-                     .replace(/#/g, '\\#');
+      .replace(/\\textcolor\{transparent\}/g, '\\\\')
+      .replace(/\\fra\{/g, '\\frac{')
+      .replace(/\\pir[^]/g, '\\pi r^')
+      .replace(/\\timesr[^]/g, '\\times r^')
+      .replace(/\\timess[^]/g, '\\times s^')
+      .replace(/\^\{ \}/g, '')
+      .replace(/([0-9])\^$/g, '$1^?')
+      .replace(/#/g, '\\#');
     while(/_\{_\{_\{_\{_\{/.test(result)) {
       result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
     }
@@ -135,20 +213,17 @@ function Application(configFile) {
       result = result.replace(/\}\}\}\}\}/g, '}}');
     }
     return result;
-  };
+  }
 
-  _this.handleRequest = function(request, response, requestUrl, query) {
+  handleRequest(request, response, requestUrl, query) {
+    const _this = this;
+
     const equationFormat = (query.format ? query.format : (query.latex ? 'TeX' : 'MathML'));
     const refid = (query.refid ? query.refid : '');
     const imageFormat = (query.imageFormat ? query.imageFormat : '');
     const width = (query.width ? query.width : null);
     const height = (query.height ? query.height : null);
     const equation = (query.equation ? query.equation : (query.latex || query.mathml));
-
-    // equationFormat = 'TeX';
-    // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315';
-    // equation = 'so\\ i\\ did\\ _{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{_{=-----------------------------------------------------------------------------------------------------------------------------------}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}9315\\div3\\ aand\\ i\\ got\\ 3105\\ \\ so\\ in\\ one\\ month\\ they\\ eat\\ 3105';
-    // equation = 'so';
 
     if (equation) {
       let hash = crypto.createHash('sha1').update(equation, 'utf8').digest('hex');
@@ -187,9 +262,11 @@ function Application(configFile) {
       }
       _this.returnError(response, 'Missing "equation" parameter', 'emptyequation');
     }
-  };
+  }
 
-  _this.run = async function() {
+  async start() {
+    const _this = this;
+
     _this.MathJax = await require('mathjax').init({
       loader: {
         load: ['input/tex', 'input/mml', 'output/svg'],
@@ -222,8 +299,8 @@ function Application(configFile) {
 
     _this.consoleLog(`Listening on port ${_this.config.port}`);
     _this.consoleLog();
-  };
+  }
 
 }
 
-module.exports = Application;
+module.exports = MathToImage;

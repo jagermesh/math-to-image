@@ -1,5 +1,15 @@
 {
-  "name": "math2image",
+  "author": {
+    "name": "Jager Mesh"
+  },
+  "bugs": {
+    "url": "https://github.com/jagermesh/math-to-image/issues"
+  },
+  "devDependencies": {
+    "gulp": "^4.0.2",
+    "gulp-jshint": "^2.1.0",
+    "jshint": "^2.12.0"
+  },
   "dependencies": {
     "colors": "^1.4.0",
     "commander": "^2.20.3",
@@ -9,8 +19,25 @@
     "redis": "^2.8.0",
     "sharp": "^0.26.2"
   },
+  "deprecated": false,
+  "description": "Math2Image Renderer",
+  "homepage": "https://github.com/jagermesh/math-to-image#readme",
+  "keywords": [
+    "math to image",
+    "tex to image"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "name": "math-to-image",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/jagermesh/math-to-image.git"
+  },
   "scripts": {
-    "build": "npm install",
-    "update": "npm update"
-  }
+    "build": "npm install && gulp build",
+    "update": "npm update && gulp build",
+    "release": "np",
+    "test": "echo \"OK\""
+  },
+  "version": "1.0.0"
 }
