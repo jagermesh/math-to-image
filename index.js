@@ -135,9 +135,20 @@ class MathToImage {
     const _this = this;
 
     if (!/mstyle mathsize/i.test(mathml)) {
-      mathml = mathml.replace(/(<math[^>]*?>)/, '$1<mstyle mathsize="16px">');
+      mathml = mathml.replace(/(<math[^>]*?>)/i, '$1<mstyle mathsize="16px">');
       mathml = mathml.replace('</math>', '</mstyle></math>');
     }
+    if (!/<math[^>]*?><mstyle[^>]*?><mtable[^>]*?>/i.test(mathml)) {
+      if (/<math[^>]*?><mstyle[^>]*?><mrow[^>]*?>/i.test(mathml)) {
+        mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable>');
+        mathml = mathml.replace('</mstyle></math>', '</mtable></mstyle></math>');
+      } else {
+        mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable><mrow>');
+        mathml = mathml.replace('</mstyle></math>', '</mrow></mtable></mstyle></math>');
+      }
+      mathml = mathml.replace(/<mspace[^>]*?>/ig, '</mrow><mrow>');
+    }
+
     return mathml;
   }
 
