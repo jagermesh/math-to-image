@@ -16,7 +16,7 @@
     "moment": "^2.29.1",
     "parse-duration": "^0.4.4",
     "redis": "^3.0.2",
-    "sharp": "^0.26.2"
+    "sharp": "^0.26.3"
   },
   "deprecated": false,
   "description": "Math2Image Renderer",
