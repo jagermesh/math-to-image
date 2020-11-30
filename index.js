@@ -146,7 +146,8 @@ class MathToImage {
         mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable><mrow>');
         mathml = mathml.replace('</mstyle></math>', '</mrow></mtable></mstyle></math>');
       }
-      mathml = mathml.replace(/<mspace[^>]*?>/ig, '</mrow><mrow>');
+      mathml = mathml.replace(/<mspace[^>]*?>.*?<\/mspace>/ig, '</mrow><mrow>');
+      mathml = mathml.replace(/<mspace[^>]*?\/>/ig, '</mrow><mrow>');
     }
 
     return mathml;
@@ -263,11 +264,7 @@ class MathToImage {
               break;
           }
           _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, cleanup: ${normalizedEquation}`);
-          if (/includegraphics/.test(normalizedEquation)) {
-            _this.returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
-          } else {
-            _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, imageFormat, width, height);
-          }
+          _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, imageFormat, width, height);
         }
       });
     } else {
