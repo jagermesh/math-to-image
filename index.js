@@ -10,6 +10,7 @@ const moment = require('moment');
 const querystring = require('querystring');
 const sharp = require('sharp');
 const parseDuration = require('parse-duration');
+const axios = require('axios');
 
 class Cache {
 
@@ -131,10 +132,9 @@ class MathToImage {
     return result;
   }
 
-  async cleanUpMathML(mathml, additionalImages) {
+  async cleanUpMathML(mathml, additionalImages, cacheKey) {
     const _this = this;
 
-    console.log(mathml);
     if (!/mstyle mathsize/i.test(mathml)) {
       mathml = mathml.replace(/(<math[^>]*?>)/i, '$1<mstyle mathsize="16px">');
       mathml = mathml.replace('</math>', '</mstyle></math>');
@@ -150,15 +150,20 @@ class MathToImage {
       mathml = mathml.replace(/<mspace[ ]+linebreak="newline"[^>]*?>.*?<\/mspace>/ig, '</mrow><mrow>');
       mathml = mathml.replace(/<mspace[ ]+linebreak="newline"[^>]*?\/>/ig, '</mrow><mrow>');
     }
+
     if (additionalImages) {
       const dpi = 20;
       for(let i = 0; i < additionalImages.length; i++) {
-        let additionalImage = additionalImages[i];
-        let imageBuffer =  Buffer.from(additionalImage.base64, 'base64');
-        let metadata = await sharp(imageBuffer).metadata();
-        let width = metadata.width/dpi;
-        let height = metadata.height/dpi;
-        mathml = mathml.replace('<mo>&#x2318;</mo>', `<mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph>`);
+        try {
+          let additionalImage = additionalImages[i];
+          let imageBuffer =  Buffer.from(additionalImage.base64, 'base64');
+          let metadata = await sharp(imageBuffer).metadata();
+          let width = metadata.width/dpi;
+          let height = metadata.height/dpi;
+          mathml = mathml.replace('<mo>&#x2318;</mo>', `<mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph>`);
+        } catch (err) {
+          _this.consoleLogRequestError(cacheKey, `${err}`);
+        }
       }
     }
 
@@ -186,6 +191,40 @@ class MathToImage {
       result = result.replace(/\}\}\}\}\}/g, '}}');
     }
     return result;
+  }
+
+  downloadImage(url) {
+    const _this = this;
+
+    return new Promise(function(resolve, reject) {
+      axios.get(url, { responseType: 'arraybuffer' }).then(function(response) {
+        if (response.status != 200) {
+          return reject('Can not download image');
+        }
+        return resolve(Buffer.from(response.data, 'binary').toString('base64'));
+      }).catch(function(err) {
+        reject(err);
+      });
+    });
+  }
+
+  downloadImages(mathml, cacheKey) {
+    const _this = this;
+
+    return new Promise(async function(resolve, reject) {
+      let urls = [...mathml.matchAll(/<mglyph.+?src="(http[^"]+)"/g)].map(function(match) {
+        return match[1];
+      });
+      for(let i = 0; i < urls.length; i++) {
+        try {
+          let data = await _this.downloadImage(urls[i]);
+          mathml = mathml.replace(`src="${urls[i]}"`, `"data:image/png;base64,${data}"`);
+        } catch (err) {
+          _this.consoleLogRequestError(cacheKey, `${err}`);
+        }
+      }
+      resolve(mathml);
+    });
   }
 
   extractImages(html) {
@@ -285,14 +324,16 @@ class MathToImage {
             normalizedEquation = _this.cleanUpLatex(normalizedEquation);
             normalizedEquation = _this.MathJax.tex2mml(normalizedEquation);
           }
-          _this.cleanUpMathML(normalizedEquation, additionalImages).then(function(normalizedEquation) {
-            normalizedEquation = normalizedEquation.trim();
-            _this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
-            if (outputFormat == 'MathML') {
-              _this.returnMathML(response, normalizedEquation);
-            } else {
-              _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
-            }
+          _this.downloadImages(normalizedEquation, cacheKey).then(function(normalizedEquation) {
+            _this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey).then(function(normalizedEquation) {
+              normalizedEquation = normalizedEquation.trim();
+              _this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
+              if (outputFormat == 'MathML') {
+                _this.returnMathML(response, normalizedEquation);
+              } else {
+                _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
+              }
+            });
           });
         }
       });
