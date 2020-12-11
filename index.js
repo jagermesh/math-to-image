@@ -131,15 +131,16 @@ class MathToImage {
     return result;
   }
 
-  cleanUpMathML(mathml) {
+  async cleanUpMathML(mathml, additionalImages) {
     const _this = this;
 
+    console.log(mathml);
     if (!/mstyle mathsize/i.test(mathml)) {
       mathml = mathml.replace(/(<math[^>]*?>)/i, '$1<mstyle mathsize="16px">');
       mathml = mathml.replace('</math>', '</mstyle></math>');
     }
     if (!/<math[^>]*?><mstyle[^>]*?><mtable[^>]*?>/i.test(mathml)) {
-      if (/<math[^>]*?><mstyle[^>]*?><mrow[^>]*?>/i.test(mathml)) {
+      if (/<math[^>]*?><mstyle[^>]*?>[ \n]*<mrow[^>]*?>/i.test(mathml)) {
         mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable>');
         mathml = mathml.replace('</mstyle></math>', '</mtable></mstyle></math>');
       } else {
@@ -148,6 +149,17 @@ class MathToImage {
       }
       mathml = mathml.replace(/<mspace[ ]+linebreak="newline"[^>]*?>.*?<\/mspace>/ig, '</mrow><mrow>');
       mathml = mathml.replace(/<mspace[ ]+linebreak="newline"[^>]*?\/>/ig, '</mrow><mrow>');
+    }
+    if (additionalImages) {
+      const dpi = 20;
+      for(let i = 0; i < additionalImages.length; i++) {
+        let additionalImage = additionalImages[i];
+        let imageBuffer =  Buffer.from(additionalImage.base64, 'base64');
+        let metadata = await sharp(imageBuffer).metadata();
+        let width = metadata.width/dpi;
+        let height = metadata.height/dpi;
+        mathml = mathml.replace('<mo>&#x2318;</mo>', `<mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph>`);
+      }
     }
 
     return mathml;
@@ -159,6 +171,7 @@ class MathToImage {
     // not supported
     let result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
       .replace(/\\textcolor\{transparent\}/g, '\\\\')
+      .replace(/\\includegraphics\{.*?\}/g, '⌘')
       .replace(/\\fra\{/g, '\\frac{')
       .replace(/\\pir[^]/g, '\\pi r^')
       .replace(/\\timesr[^]/g, '\\times r^')
@@ -172,6 +185,18 @@ class MathToImage {
     while(/\}\}\}\}\}/.test(result)) {
       result = result.replace(/\}\}\}\}\}/g, '}}');
     }
+    return result;
+  }
+
+  extractImages(html) {
+    const _this = this;
+
+    let result = [];
+    let matches = [...html.matchAll(/\\includegraphics\{.*?data:image\/(.+?);base64,(.+?)\}/g)];
+    matches.map(function(match) {
+      result.push({ format: match[1], base64: match[2] });
+    });
+
     return result;
   }
 
@@ -190,20 +215,22 @@ class MathToImage {
     _this.consoleLogRequestInfo(cacheKey, 'Request processed');
   }
 
-  renderEquation(response, equationFormat, equation, cacheKey, imageFormat, width, height) {
+  returnMathML(response, responseBody, cacheKey, imageFormat) {
+    const _this = this;
+
+    response.writeHead(200, { 'Content-Type': 'text/plain' });
+    response.write(responseBody);
+    response.end();
+
+    _this.consoleLogRequestInfo(cacheKey, 'Request processed');
+  }
+
+  renderEquation(response, equationFormat, equation, cacheKey, imageFormat) {
     const _this = this;
 
     let normalizedEquation = equation.trim();
     try {
-      let svgDom;
-      switch (equationFormat) {
-        case  'TeX':
-          svgDom = _this.MathJax.tex2svg(normalizedEquation);
-          break;
-        case 'MathML':
-          svgDom = _this.MathJax.mathml2svg(normalizedEquation);
-          break;
-      }
+      let svgDom = _this.MathJax.mathml2svg(normalizedEquation);
       let svg = _this.MathJax.startup.adaptor.innerHTML(svgDom);
       svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
       _this.consoleLogRequestInfo(cacheKey, 'Rendered');
@@ -232,43 +259,41 @@ class MathToImage {
   handleRequest(request, response, requestUrl, query) {
     const _this = this;
 
-    const equationFormat = (query.format ? query.format : (query.latex ? 'TeX' : 'MathML'));
+    const equationFormat = (query.format ? query.format : 'MathML');
     const refid = (query.refid ? query.refid : '');
-    const imageFormat = (query.imageFormat ? query.imageFormat : '');
-    const width = (query.width ? query.width : null);
-    const height = (query.height ? query.height : null);
-    const equation = (query.equation ? query.equation : (query.latex || query.mathml));
+    const outputFormat = (query.outputFormat ? query.outputFormat : (query.imageFormat ? query.imageFormat : 'svg'));
+    const equation = query.equation ? query.equation : '';
 
-    if (equation) {
+    if (equation && equation.length > 0) {
       let hash = crypto.createHash('sha1').update(equation, 'utf8').digest('hex');
-      let cacheKey = `${equationFormat}:${hash}:${refid}:${imageFormat}`;
+      let cacheKey = `${equationFormat}:${hash}:${refid}:${outputFormat}`;
 
-      _this.consoleLogRequestInfo(cacheKey, `${request.method}: ${requestUrl}`);
-      _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, original: ${equation}`);
+      _this.consoleLogRequestInfo(cacheKey, `${request.method}: ${requestUrl.substring(0, 512)}`);
+      _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, original: ${equation.substring(0, 512)}`);
 
       _this.cache.get(cacheKey, function (currentValue) {
         if (currentValue) {
           _this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
           const image = new Buffer(currentValue, 'base64');
-          _this.returnImage(response, image, cacheKey, imageFormat);
+          _this.returnImage(response, image, cacheKey, outputFormat);
         } else {
           let normalizedEquation = equation;
-
-          switch (equationFormat) {
-            case  'TeX':
-              normalizedEquation = _this.cleanUpHtmlCharacters(normalizedEquation);
-              normalizedEquation = _this.cleanUpLatex(normalizedEquation);
-              break;
-            case 'MathML':
-              normalizedEquation = _this.cleanUpMathML(normalizedEquation);
-              break;
+          let additionalImages = [];
+          if (equationFormat == 'TeX') {
+            additionalImages   = _this.extractImages(normalizedEquation);
+            normalizedEquation = _this.cleanUpHtmlCharacters(normalizedEquation);
+            normalizedEquation = _this.cleanUpLatex(normalizedEquation);
+            normalizedEquation = _this.MathJax.tex2mml(normalizedEquation);
           }
-          _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, cleanup: ${normalizedEquation}`);
-          if (/includegraphics/.test(normalizedEquation)) {
-            _this.returnError(response, 'TeX parse error: Undefined control sequence \\includegraphics', cacheKey);
-          } else {
-            _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, imageFormat, width, height);
-          }
+          _this.cleanUpMathML(normalizedEquation, additionalImages).then(function(normalizedEquation) {
+            normalizedEquation = normalizedEquation.trim();
+            _this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
+            if (outputFormat == 'MathML') {
+              _this.returnMathML(response, normalizedEquation);
+            } else {
+              _this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
+            }
+          });
         }
       });
     } else {
@@ -286,6 +311,9 @@ class MathToImage {
       loader: {
         load: ['input/tex', 'input/mml', 'output/svg'],
       },
+      svg: {
+        minScale: 1,
+      }
     });
 
     _this.server = http.createServer();
