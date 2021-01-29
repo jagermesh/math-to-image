@@ -218,7 +218,7 @@ class MathToImage {
       for(let i = 0; i < urls.length; i++) {
         try {
           let data = await _this.downloadImage(urls[i]);
-          mathml = mathml.replace(`src="${urls[i]}"`, `"data:image/png;base64,${data}"`);
+          mathml = mathml.replace(`src="${urls[i]}"`, `src="data:image/png;base64,${data}"`);
         } catch (err) {
           _this.consoleLogRequestError(cacheKey, `${err}`);
         }
@@ -246,6 +246,7 @@ class MathToImage {
       response.writeHead(200, { 'Content-Type': 'image/png' });
       response.write(responseBody);
     } else {
+      _this.consoleLogRequestInfo(responseBody, 'SVG');
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       response.write(responseBody);
     }
@@ -272,6 +273,7 @@ class MathToImage {
       let svgDom = _this.MathJax.mathml2svg(normalizedEquation);
       let svg = _this.MathJax.startup.adaptor.innerHTML(svgDom);
       svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
+      svg = svg.replace(/ href="data[:]image/g, ' xlink:href="data:image');
       _this.consoleLogRequestInfo(cacheKey, 'Rendered');
       if (imageFormat == 'png') {
         sharp(Buffer.from(svg)).toFormat('png').toBuffer(function(error, png) {
