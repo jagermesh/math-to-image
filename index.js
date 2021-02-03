@@ -140,7 +140,7 @@ class MathToImage {
       mathml = mathml.replace('</math>', '</mstyle></math>');
     }
     if (!/<math[^>]*?><mstyle[^>]*?><mtable[^>]*?>/i.test(mathml)) {
-      if (/<math[^>]*?><mstyle[^>]*?>[ \n]*<mrow[^>]*?>/i.test(mathml)) {
+      if (/<math[^>]*?><mstyle[^>]*?>[ \n]*<mrow[^>]*?>/i.test(mathml) && /<[/]mrow><[/]mstyle><[/]math>/i.test(mathml)) {
         mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable>');
         mathml = mathml.replace('</mstyle></math>', '</mtable></mstyle></math>');
       } else {
@@ -160,7 +160,8 @@ class MathToImage {
           let metadata = await sharp(imageBuffer).metadata();
           let width = metadata.width/dpi;
           let height = metadata.height/dpi;
-          mathml = mathml.replace('<mo>&#x2318;</mo>', `<mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph>`);
+          // mathml = mathml.replace('<mo>&#x2318;</mo>', `<mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph>`);
+          mathml = mathml.replace('<mtext>&#x2318;</mtext>', `</mrow><mrow><mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph></mrow><mrow>`);
         } catch (err) {
           _this.consoleLogRequestError(cacheKey, `${err}`);
         }
@@ -177,6 +178,7 @@ class MathToImage {
     let result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
       .replace(/\\textcolor\{transparent\}/g, '\\\\')
       .replace(/\\includegraphics\{.*?\}/g, '⌘')
+      // .replace(/\\includegraphics\{.*?\}/g, 'Y')
       .replace(/\\fra\{/g, '\\frac{')
       .replace(/\\pir[^]/g, '\\pi r^')
       .replace(/\\timesr[^]/g, '\\times r^')
@@ -246,7 +248,7 @@ class MathToImage {
       response.writeHead(200, { 'Content-Type': 'image/png' });
       response.write(responseBody);
     } else {
-      _this.consoleLogRequestInfo(responseBody, 'SVG');
+      _this.consoleLogRequestInfo(cacheKey, `SVG: ${responseBody.substring(0, 512)}`);
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       response.write(responseBody);
     }
@@ -324,11 +326,15 @@ class MathToImage {
             additionalImages   = _this.extractImages(normalizedEquation);
             normalizedEquation = _this.cleanUpHtmlCharacters(normalizedEquation);
             normalizedEquation = _this.cleanUpLatex(normalizedEquation);
+            _this.consoleLogRequestInfo(cacheKey, `ORIGINAL: ${normalizedEquation}`);
+            // normalizedEquation
             normalizedEquation = _this.MathJax.tex2mml(normalizedEquation);
+            normalizedEquation = normalizedEquation.replace(/<mrow>.*?<mo>&#x2318;<[/]mo>.*?<[/]mrow>/gs, '<mtext>&#x2318;</mtext>');
           }
           _this.downloadImages(normalizedEquation, cacheKey).then(function(normalizedEquation) {
             _this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey).then(function(normalizedEquation) {
               normalizedEquation = normalizedEquation.trim();
+              _this.consoleLogRequestInfo(cacheKey, `NORMALIZED: ${normalizedEquation}`);
               _this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
               if (outputFormat == 'MathML') {
                 _this.returnMathML(response, normalizedEquation);
