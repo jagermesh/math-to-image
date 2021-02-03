@@ -248,7 +248,7 @@ class MathToImage {
       response.writeHead(200, { 'Content-Type': 'image/png' });
       response.write(responseBody);
     } else {
-      _this.consoleLogRequestInfo(cacheKey, `SVG: ${responseBody.substring(0, 512)}`);
+      // _this.consoleLogRequestInfo(cacheKey, `SVG: ${responseBody.substring(0, 512)}`);
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
       response.write(responseBody);
     }
