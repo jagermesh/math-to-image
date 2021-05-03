@@ -2,7 +2,6 @@ const path   = require('path');
 const colors = require('colors');
 const http = require('http');
 const url = require('url');
-const mathjax = require('mathjax');
 const crypto = require('crypto');
 const redis = require("redis");
 const fs = require('fs');
@@ -323,7 +322,7 @@ class MathToImage {
           let normalizedEquation = equation;
           let additionalImages = [];
           if (equationFormat == 'TeX') {
-            additionalImages   = _this.extractImages(normalizedEquation);
+            additionalImages = _this.extractImages(normalizedEquation);
             normalizedEquation = _this.cleanUpHtmlCharacters(normalizedEquation);
             normalizedEquation = _this.cleanUpLatex(normalizedEquation);
             _this.consoleLogRequestInfo(cacheKey, `ORIGINAL: ${normalizedEquation}`);
