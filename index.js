@@ -53,7 +53,6 @@ class Cache {
     if (_this.cacheImpl) {
       _this.application.consoleLogRequestInfo(name, `Checking cache`);
       try {
-        name += Math.random();
         _this.cacheImpl.get(_this.getKey(name), function (error, value) {
           if (error) {
             _this.application.consoleLogRequestError(name, `Checking cache failed (1): ${error}`);
