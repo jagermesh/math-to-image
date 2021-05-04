@@ -18,6 +18,7 @@ class Cache {
 
     _this.APP_ID = '27af2f86-6d6c-4254-a6f1-694386ffc921';
     _this.config = Object.assign({ }, config);
+    _this.application = application;
 
     _this.cacheImpl = null;
 
@@ -25,7 +26,7 @@ class Cache {
       _this.config.redis.lifespanSeconds = parseDuration(_this.config.redis.lifespan) / 1000;
       const redisClient = redis.createClient(_this.config.redis.connectString);
       redisClient.on('error', function(error) {
-        application.consoleLogError(`Redis error: ${error.toString()}`);
+        _this.application.consoleLogError(`Redis error: ${error.toString()}`);
       });
       redisClient.on('connect', function(error) {
         _this.cacheImpl = redisClient;
@@ -50,11 +51,20 @@ class Cache {
     const _this = this;
 
     if (_this.cacheImpl) {
+      _this.application.consoleLogRequestInfo(name, `Checking cache`);
       try {
+        name += Math.random();
         _this.cacheImpl.get(_this.getKey(name), function (error, value) {
-          callback(value);
+          if (error) {
+            _this.application.consoleLogRequestError(name, `Checking cache failed (1): ${error}`);
+            callback(null);
+          } else {
+            _this.application.consoleLogRequestInfo(name, `Success`);
+            callback(value);
+          }
         });
       } catch (error) {
+        _this.application.consoleLogRequestError(name, `Checking cache failed (2): ${error}`);
         callback(null);
       }
     } else {
@@ -66,7 +76,11 @@ class Cache {
     const _this = this;
 
     if (_this.cacheImpl) {
-      _this.cacheImpl.set(_this.getKey(name), value, 'EX', _this.config.redis.lifespanSeconds);
+      try {
+        _this.cacheImpl.set(_this.getKey(name), value, 'EX', _this.config.redis.lifespanSeconds);
+      } catch (err) {
+
+      }
     }
   }
 
