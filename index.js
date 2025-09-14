@@ -1,10 +1,8 @@
-const path   = require('path');
 const colors = require('colors');
 const http = require('http');
 const url = require('url');
 const crypto = require('crypto');
-const redis = require("redis");
-const fs = require('fs');
+const redis = require('redis');
 const moment = require('moment');
 const querystring = require('querystring');
 const sharp = require('sharp');
@@ -12,12 +10,11 @@ const parseDuration = require('parse-duration');
 const axios = require('axios');
 
 class Cache {
-
   constructor(application, config) {
     const _this = this;
 
     _this.APP_ID = '27af2f86-6d6c-4254-a6f1-694386ffc921';
-    _this.config = Object.assign({ }, config);
+    _this.config = Object.assign({}, config);
     _this.application = application;
 
     _this.cacheImpl = null;
@@ -28,13 +25,13 @@ class Cache {
       redisClient.on('error', function(error) {
         _this.application.consoleLogError(`Redis error: ${error.toString()}`);
       });
-      redisClient.on('connect', function(error) {
+      redisClient.on('connect', function() {
         _this.cacheImpl = redisClient;
       });
-      redisClient.on('reconnecting', function(error) {
+      redisClient.on('reconnecting', function() {
         _this.cacheImpl = null;
       });
-      redisClient.on('end', function(error) {
+      redisClient.on('end', function() {
         _this.cacheImpl = null;
       });
     }
@@ -51,14 +48,14 @@ class Cache {
     const _this = this;
 
     if (_this.cacheImpl) {
-      _this.application.consoleLogRequestInfo(name, `Checking cache`);
+      _this.application.consoleLogRequestInfo(name, 'Checking cache');
       try {
-        _this.cacheImpl.get(_this.getKey(name), function (error, value) {
+        _this.cacheImpl.get(_this.getKey(name), function(error, value) {
           if (error) {
             _this.application.consoleLogRequestError(name, `Checking cache failed (1): ${error}`);
             callback(null);
           } else {
-            _this.application.consoleLogRequestInfo(name, `Success`);
+            _this.application.consoleLogRequestInfo(name, 'Success');
             callback(value);
           }
         });
@@ -78,26 +75,24 @@ class Cache {
       try {
         _this.cacheImpl.set(_this.getKey(name), value, 'EX', _this.config.redis.lifespanSeconds);
       } catch (err) {
-
+        //
       }
     }
   }
-
 }
 
 class MathToImage {
-
   constructor(config) {
     const _this = this;
 
     _this.API_KEY = 'fb499ad3-db31-430b-98ad-49db456b26a6';
-    _this.config = Object.assign({ port: 8000 }, config);
+    _this.config = Object.assign({
+      port: 8000,
+    }, config);
     _this.cache = new Cache(_this, _this.config);
   }
 
   consoleLog(message) {
-    const _this = this;
-
     if (message) {
       console.log(`${colors.yellow(moment().format())} ${message.replace(/[\n\r]/g, '')}`);
     } else {
@@ -126,7 +121,9 @@ class MathToImage {
   returnError(response, message, cacheKey, contentType = 'text/plain') {
     const _this = this;
 
-    response.writeHead(406, { 'Content-Type': contentType });
+    response.writeHead(406, {
+      'Content-Type': contentType,
+    });
     response.write(message);
     response.end();
 
@@ -134,13 +131,11 @@ class MathToImage {
   }
 
   cleanUpHtmlCharacters(html) {
-    const _this = this;
-
     const result = html.replace(/&gt;/g, '>')
       .replace(/&lt;/g, '<')
       .replace(/&amp;/g, '&')
       .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'");
+      .replace(/&#039;/g, '\'');
     return result;
   }
 
@@ -165,13 +160,13 @@ class MathToImage {
 
     if (additionalImages) {
       const dpi = 20;
-      for(let i = 0; i < additionalImages.length; i++) {
+      for (let i = 0; i < additionalImages.length; i++) {
         try {
           let additionalImage = additionalImages[i];
-          let imageBuffer =  Buffer.from(additionalImage.base64, 'base64');
+          let imageBuffer = Buffer.from(additionalImage.base64, 'base64');
           let metadata = await sharp(imageBuffer).metadata();
-          let width = metadata.width/dpi;
-          let height = metadata.height/dpi;
+          let width = metadata.width / dpi;
+          let height = metadata.height / dpi;
           // mathml = mathml.replace('<mo>&#x2318;</mo>', `<mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph>`);
           mathml = mathml.replace('<mtext>&#x2318;</mtext>', `</mrow><mrow><mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph></mrow><mrow>`);
         } catch (err) {
@@ -184,8 +179,6 @@ class MathToImage {
   }
 
   cleanUpLatex(html) {
-    const _this = this;
-
     // not supported
     let result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
       .replace(/\\textcolor\{transparent\}/g, '\\\\')
@@ -198,20 +191,20 @@ class MathToImage {
       .replace(/\^\{ \}/g, '')
       .replace(/([0-9])\^$/g, '$1^?')
       .replace(/#/g, '\\#');
-    while(/_\{_\{_\{_\{_\{/.test(result)) {
+    while (/_\{_\{_\{_\{_\{/.test(result)) {
       result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
     }
-    while(/\}\}\}\}\}/.test(result)) {
+    while (/\}\}\}\}\}/.test(result)) {
       result = result.replace(/\}\}\}\}\}/g, '}}');
     }
     return result;
   }
 
   downloadImage(url) {
-    const _this = this;
-
     return new Promise(function(resolve, reject) {
-      axios.get(url, { responseType: 'arraybuffer' }).then(function(response) {
+      axios.get(url, {
+        responseType: 'arraybuffer',
+      }).then(function(response) {
         if (response.status != 200) {
           return reject('Can not download image');
         }
@@ -222,32 +215,33 @@ class MathToImage {
     });
   }
 
-  downloadImages(mathml, cacheKey) {
-    const _this = this;
+  async downloadImages(mathml, cacheKey) {
+    const urls = [...mathml.matchAll(/<mglyph.+?src="(http[^"]+)"/g)]
+      .map((match) => match[1]);
 
-    return new Promise(async function(resolve, reject) {
-      let urls = [...mathml.matchAll(/<mglyph.+?src="(http[^"]+)"/g)].map(function(match) {
-        return match[1];
-      });
-      for(let i = 0; i < urls.length; i++) {
-        try {
-          let data = await _this.downloadImage(urls[i]);
-          mathml = mathml.replace(`src="${urls[i]}"`, `src="data:image/png;base64,${data}"`);
-        } catch (err) {
-          _this.consoleLogRequestError(cacheKey, `${err}`);
-        }
+    for (let i = 0; i < urls.length; i++) {
+      try {
+        const data = await this.downloadImage(urls[i]);
+        mathml = mathml.replace(
+          `src="${urls[i]}"`,
+          `src="data:image/png;base64,${data}"`,
+        );
+      } catch (err) {
+        this.consoleLogRequestError(cacheKey, String(err));
       }
-      resolve(mathml);
-    });
+    }
+
+    return mathml;
   }
 
   extractImages(html) {
-    const _this = this;
-
     let result = [];
     let matches = [...html.matchAll(/\\includegraphics\{.*?data:image\/(.+?);base64,(.+?)\}/g)];
     matches.map(function(match) {
-      result.push({ format: match[1], base64: match[2] });
+      result.push({
+        format: match[1],
+        base64: match[2],
+      });
     });
 
     return result;
@@ -257,11 +251,15 @@ class MathToImage {
     const _this = this;
 
     if (imageFormat == 'png') {
-      response.writeHead(200, { 'Content-Type': 'image/png' });
+      response.writeHead(200, {
+        'Content-Type': 'image/png',
+      });
       response.write(responseBody);
     } else {
       // _this.consoleLogRequestInfo(cacheKey, `SVG: ${responseBody.substring(0, 512)}`);
-      response.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      response.writeHead(200, {
+        'Content-Type': 'image/svg+xml',
+      });
       response.write(responseBody);
     }
     response.end();
@@ -269,10 +267,12 @@ class MathToImage {
     _this.consoleLogRequestInfo(cacheKey, 'Request processed');
   }
 
-  returnMathML(response, responseBody, cacheKey, imageFormat) {
+  returnMathML(response, responseBody, cacheKey) {
     const _this = this;
 
-    response.writeHead(200, { 'Content-Type': 'text/plain' });
+    response.writeHead(200, {
+      'Content-Type': 'text/plain',
+    });
     response.write(responseBody);
     response.end();
 
@@ -293,7 +293,7 @@ class MathToImage {
         sharp(Buffer.from(svg)).toFormat('png').toBuffer(function(error, png) {
           if (error) {
             _this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
-            returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
+            _this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
           } else {
             _this.consoleLogRequestInfo(cacheKey, 'Saving result to cache');
             _this.cache.set(cacheKey, png.toString('base64'));
@@ -326,7 +326,7 @@ class MathToImage {
       _this.consoleLogRequestInfo(cacheKey, `${request.method}: ${requestUrl.substring(0, 512)}`);
       _this.consoleLogRequestInfo(cacheKey, `${equationFormat}, original: ${equation.substring(0, 512)}`);
 
-      _this.cache.get(cacheKey, function (currentValue) {
+      _this.cache.get(cacheKey, function(currentValue) {
         if (currentValue) {
           _this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
           const image = new Buffer(currentValue, 'base64');
@@ -374,7 +374,7 @@ class MathToImage {
       },
       svg: {
         minScale: 1,
-      }
+      },
     });
 
     _this.server = http.createServer();
@@ -404,7 +404,6 @@ class MathToImage {
     _this.consoleLog(`Listening on port ${_this.config.port}`);
     _this.consoleLog();
   }
-
 }
 
 module.exports = MathToImage;
