@@ -27,7 +27,7 @@
     "tex to image"
   ],
   "license": "MIT",
-  "main": "index.js",
+  "main": "./index.js",
   "name": "math-to-image",
   "repository": {
     "type": "git",
@@ -39,9 +39,8 @@
     "release": "np",
     "test": "echo \"OK\""
   },
-  "version": "1.0.20",
+  "version": "1.0.21",
   "engines": {
     "node": ">=12"
-  },
-  "main": "./index.js"
+  }
 }
