@@ -1,10 +1,10 @@
-const gulp = require('gulp');
-const eslint = require('gulp-eslint');
+import gulp from 'gulp';
+import eslint from 'gulp-eslint';
 
 const configs = {
   eslint: {
     src: [
-      '*.js',
+      'libs/*.js',
     ],
   },
 };

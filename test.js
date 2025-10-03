@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const MathToImage = require(__dirname + '/index.js');
+const MathToImageService = require('./libs/MathToImageService.js');
 
-let mathToImage = new MathToImage();
-mathToImage.start();
+let mathToImageService = new MathToImageService();
+mathToImageService.start();
