@@ -59,7 +59,7 @@ module.exports = class Cache {
     if (this.cacheImpl) {
       try {
         this.cacheImpl.set(this.getKey(name), value, 'EX', this.config.redis.lifespanSeconds);
-      } catch (err) {
+      } catch {
         //
       }
     }
