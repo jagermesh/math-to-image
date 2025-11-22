@@ -41,7 +41,7 @@
     "release": "np",
     "test": "echo \"OK\""
   },
-  "version": "1.0.22",
+  "version": "1.0.23",
   "engines": {
     "node": ">=12"
   }
