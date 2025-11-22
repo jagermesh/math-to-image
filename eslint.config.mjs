@@ -5,7 +5,10 @@ export default [
   js.configs.recommended,
 
   {
-    files: ['**/*.js', '**/*.mjs'],
+    files: [
+      '**/*.js',
+      '**/*.mjs'
+    ],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

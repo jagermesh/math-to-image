@@ -1,8 +1,8 @@
-const crypto = require('crypto');
-const redis = require('redis');
-const parseDuration = require('parse-duration');
+import crypto from  'crypto';
+import redis from 'redis';
+import parseDuration from 'parse-duration';
 
-module.exports = class Cache {
+export default class Cache {
   constructor(application, config) {
     this.APP_ID = '27af2f86-6d6c-4254-a6f1-694386ffc921';
     this.config = Object.assign({}, config);
@@ -65,4 +65,3 @@ module.exports = class Cache {
     }
   }
 };
-

@@ -1,16 +1,16 @@
-const colors = require('colors');
-const crypto = require('crypto');
-const http = require('http');
-const url = require('url');
-const moment = require('moment');
-const querystring = require('querystring');
-const sharp = require('sharp');
-const axios = require('axios');
-const mathjax = require('mathjax');
+import colors from 'colors';
+import crypto from 'crypto';
+import http from 'http';
+import url from 'url';
+import moment from 'moment';
+import querystring from 'querystring';
+import sharp from 'sharp';
+import axios from 'axios';
+import mathjax from 'mathjax';
 
-const Cache = require('./Cache.js');
+import Cache from './Cache.js';
 
-module.exports = class MathToImageService {
+export default class MathToImageService {
   constructor(config) {
     this.config = Object.assign({
       port: 8000,
@@ -83,7 +83,10 @@ module.exports = class MathToImageService {
           let metadata = await sharp(imageBuffer).metadata();
           let width = metadata.width / dpi;
           let height = metadata.height / dpi;
-          mathml = mathml.replace('<mtext>&#x2318;</mtext>', `</mrow><mrow><mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph></mrow><mrow>`);
+          mathml = mathml.replace(
+            '<mtext>&#x2318;</mtext>',
+            `</mrow><mrow><mglyph width="${width}" height="${height}" src="data:image/${additionalImage.format};base64,${additionalImage.base64}"></mglyph></mrow><mrow>`
+          );
         } catch (err) {
           this.consoleLogRequestError(cacheKey, `${err}`);
         }
@@ -309,4 +312,3 @@ module.exports = class MathToImageService {
     this.consoleLog();
   }
 };
-

@@ -1,3 +1,3 @@
-const MathToImageService = require('./libs/MathToImageService.js');
+import MathToImageService from './libs/MathToImageService.js';
 
-module.exports = MathToImageService;
+export default MathToImageService;

@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
-const MathToImageService = require('./libs/MathToImageService.js');
+import MathToImageService from './index.js';
 
-let mathToImageService = new MathToImageService();
+let mathToImageService = new MathToImageService({
+  port: 8000,
+  redis: {
+    lifespan: '30 min',
+    connectString: 'redis://localhost:6379',
+  },
+});
 mathToImageService.start();

@@ -44,5 +44,6 @@
   "version": "1.0.23",
   "engines": {
     "node": ">=12"
-  }
+  },
+  "type": "module"
 }

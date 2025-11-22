@@ -12,10 +12,10 @@ npm install --save math-to-image
 2) Create `math2image.js` with following code as an example
 
 ```javascript
-const MathToImage = require('math-to-image');
+import MathToImageService from 'math-to-image';
 
-let mathToImage = new MathToImage();
-mathToImage.start();
+let mathToImageService = new MathToImageService();
+mathToImageService.start();
 ```
 
 3) Run the service
@@ -33,7 +33,8 @@ The best way to make sure service is always up and running is to use pm2.
 ```yaml
 module.exports = {
   apps : [
-    { name: 'Math2Image',
+    {
+      name: 'Math2Image',
       script: 'math2image.js',
       instances: 1,
       autorestart: true,
