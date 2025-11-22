@@ -17,6 +17,7 @@ export default class Cache {
         this.application.consoleLogError(`Redis error: ${error.toString()}`);
       });
       redisClient.on('connect', () => {
+        this.application.consoleLog(`Redis connected`);
         this.cacheImpl = redisClient;
       });
       redisClient.on('reconnecting', () => {
@@ -25,6 +26,7 @@ export default class Cache {
       redisClient.on('end', () => {
         this.cacheImpl = null;
       });
+      redisClient.connect();
     }
   }
 
@@ -37,14 +39,12 @@ export default class Cache {
     if (this.cacheImpl) {
       this.application.consoleLogRequestInfo(name, 'Checking cache');
       try {
-        this.cacheImpl.get(this.getKey(name), (error, value) => {
-          if (error) {
-            this.application.consoleLogRequestError(name, `Checking cache failed (1): ${error}`);
-            callback(null);
-          } else {
-            this.application.consoleLogRequestInfo(name, 'Success');
-            callback(value);
-          }
+        this.cacheImpl.get(this.getKey(name)).then((value) => {
+          this.application.consoleLogRequestInfo(name, 'Success');
+          callback(value);
+        }).catch((error) => {
+          this.application.consoleLogRequestError(name, `Checking cache failed (1): ${error}`);
+          callback(null);
         });
       } catch (error) {
         this.application.consoleLogRequestError(name, `Checking cache failed (2): ${error}`);
