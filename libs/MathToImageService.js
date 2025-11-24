@@ -380,7 +380,7 @@ export default class MathToImageService {
         minScale: 1,
         fontCache: 'local',
         linebreaks: {
-          automatic: false,
+          inline: false,
         },
       },
     });
