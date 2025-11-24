@@ -249,7 +249,9 @@ export default class MathToImageService {
       });
 
       for (const child of inner) {
-        if (adaptor.kind(child) === 'defs') continue;
+        if (adaptor.kind(child) === 'defs') {
+          continue;
+        }
         adaptor.append(g, child);
       }
 
@@ -284,8 +286,7 @@ export default class MathToImageService {
       const svgDocument = this.mathjax.mathml2svg(normalizedEquation);
       const adaptor = this.mathjax.startup.adaptor;
 
-      let svg = adaptor.outerHTML(adaptor.firstChild(svgDocument));
-      // let svg = adaptor.innerHTML(svgDocument);
+      let svg = adaptor.innerHTML(svgDocument);
 
       svg = `
         <?xml version="1.0" encoding="UTF-8"?>
@@ -294,8 +295,6 @@ export default class MathToImageService {
       `
       .trim()
       .replace(/ href="data[:]image/g, ' xlink:href="data:image');
-
-      // svg = this.mmlToSingleSvg(normalizedEquation);
 
       this.consoleLogRequestInfo(cacheKey, 'Rendered');
       if (imageFormat == 'png') {
