@@ -191,13 +191,112 @@ export default class MathToImageService {
     this.consoleLogRequestInfo(cacheKey, 'Request processed');
   }
 
+  mmlToSingleSvg(mml) {
+    const adaptor = this.mathjax.startup.adaptor;
+
+    const container = this.mathjax.mathml2svg(mml);
+
+    const children = adaptor.childNodes(container);
+    const svgNodes = children.filter((n) => adaptor.kind(n) === 'svg');
+
+    if (svgNodes.length === 0) {
+      throw new Error('No <svg> nodes found in MathJax output');
+    }
+
+    if (svgNodes.length === 1) {
+      return adaptor.outerHTML(svgNodes[0]);
+    }
+
+    const root = adaptor.node('svg', {
+      xmlns: 'http://www.w3.org/2000/svg',
+      'xmlns:xlink': 'http://www.w3.org/1999/xlink',
+    });
+
+    let xOffset = 0;
+    let maxHeight = 0;
+
+    const rootDefs = adaptor.node('defs', {});
+    let hasDefs = false;
+
+    for (const svg of svgNodes) {
+      const viewBox = adaptor.getAttribute(svg, 'viewBox') || '';
+      let width = 0;
+      let height = 0;
+
+      if (viewBox) {
+        const parts = viewBox.split(/\s+/).map(parseFloat);
+        width = parts[2] || 0;
+        height = parts[3] || 0;
+      } else {
+        width = parseFloat(adaptor.getAttribute(svg, 'width') || '0');
+        height = parseFloat(adaptor.getAttribute(svg, 'height') || '0');
+      }
+
+      if (height > maxHeight) {
+        maxHeight = height;
+      }
+
+      const inner = adaptor.childNodes(svg);
+      for (const child of inner) {
+        if (adaptor.kind(child) === 'defs') {
+          adaptor.append(rootDefs, child);
+          hasDefs = true;
+        }
+      }
+
+      const g = adaptor.node('g', {
+        transform: `translate(${xOffset}, 0)`,
+      });
+
+      for (const child of inner) {
+        if (adaptor.kind(child) === 'defs') continue;
+        adaptor.append(g, child);
+      }
+
+      adaptor.append(root, g);
+
+      xOffset += width;
+    }
+
+    if (hasDefs) {
+      adaptor.append(root, rootDefs);
+    }
+
+    adaptor.setAttribute(root, 'viewBox', `0 0 ${xOffset} ${maxHeight}`);
+    adaptor.setAttribute(root, 'width', `${xOffset}`);
+    adaptor.setAttribute(root, 'height', `${maxHeight}`);
+
+    let svgText = adaptor.outerHTML(root);
+
+    svgText =
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>` +
+      svgText;
+
+    svgText = svgText.replace(/ href="data[:]image/g, ' xlink:href="data:image');
+
+    return svgText;
+  }
+
   renderEquation(response, equationFormat, equation, cacheKey, imageFormat) {
     let normalizedEquation = equation.trim();
     try {
-      let svgDom = this.mathjax.mathml2svg(normalizedEquation);
-      let svg = this.mathjax.startup.adaptor.innerHTML(svgDom);
-      svg = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>${svg}`;
-      svg = svg.replace(/ href="data[:]image/g, ' xlink:href="data:image');
+      const svgDocument = this.mathjax.mathml2svg(normalizedEquation);
+      const adaptor = this.mathjax.startup.adaptor;
+
+      let svg = adaptor.outerHTML(adaptor.firstChild(svgDocument));
+      // let svg = adaptor.innerHTML(svgDocument);
+
+      svg = `
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>
+        ${svg}
+      `
+      .trim()
+      .replace(/ href="data[:]image/g, ' xlink:href="data:image');
+
+      // svg = this.mmlToSingleSvg(normalizedEquation);
+
       this.consoleLogRequestInfo(cacheKey, 'Rendered');
       if (imageFormat == 'png') {
         sharp(Buffer.from(svg)).toFormat('png').toBuffer((error, png) => {
@@ -280,6 +379,10 @@ export default class MathToImageService {
       },
       svg: {
         minScale: 1,
+        fontCache: 'local',
+        linebreaks: {
+          automatic: false,
+        },
       },
     });
 
