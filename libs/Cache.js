@@ -58,7 +58,9 @@ export default class Cache {
   set(name, value) {
     if (this.cacheImpl) {
       try {
-        this.cacheImpl.set(this.getKey(name), value, 'EX', this.config.redis.lifespanSeconds);
+        this.cacheImpl.set(this.getKey(name), value, {
+          EX: this.config.redis.lifespanSeconds
+        });
       } catch {
         //
       }

@@ -62,6 +62,7 @@ export default class MathToImageService {
       mathml = mathml.replace(/(<math[^>]*?>)/i, '$1<mstyle mathsize="16px">');
       mathml = mathml.replace('</math>', '</mstyle></math>');
     }
+
     if (!/<math[^>]*?><mstyle[^>]*?><mtable[^>]*?>/i.test(mathml)) {
       if (/<math[^>]*?><mstyle[^>]*?>[ \n]*<mrow[^>]*?>/i.test(mathml) && /<[/]mrow><[/]mstyle><[/]math>/i.test(mathml)) {
         mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable>');
@@ -118,15 +119,15 @@ export default class MathToImageService {
   }
 
   downloadImage(url) {
-    return new Promise(function(resolve, reject) {
+    return new Promise((resolve, reject) => {
       axios.get(url, {
         responseType: 'arraybuffer',
-      }).then(function(response) {
+      }).then((response) => {
         if (response.status != 200) {
           return reject('Can not download image');
         }
         return resolve(Buffer.from(response.data, 'binary').toString('base64'));
-      }).catch(function(err) {
+      }).catch((err) => {
         reject(err);
       });
     });
@@ -154,7 +155,7 @@ export default class MathToImageService {
   extractImages(html) {
     let result = [];
     let matches = [...html.matchAll(/\\includegraphics\{.*?data:image\/(.+?);base64,(.+?)\}/g)];
-    matches.map(function(match) {
+    matches.map((match) => {
       result.push({
         format: match[1],
         base64: match[2],
@@ -280,10 +281,11 @@ export default class MathToImageService {
     return svgText;
   }
 
-  renderEquation(response, equationFormat, equation, cacheKey, imageFormat) {
-    let normalizedEquation = equation.trim();
+  async renderEquation(response, equationFormat, equation, cacheKey, imageFormat) {
+    const normalizedEquation = equation.trim();
+
     try {
-      const svgDocument = this.mathjax.mathml2svg(normalizedEquation);
+      const svgDocument = await this.mathjax.mathml2svgPromise(normalizedEquation);
       const adaptor = this.mathjax.startup.adaptor;
 
       let svg = adaptor.innerHTML(svgDocument);
@@ -293,21 +295,31 @@ export default class MathToImageService {
         <!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>
         ${svg}
       `
-      .trim()
-      .replace(/ href="data[:]image/g, ' xlink:href="data:image');
+        .trim()
+        .replace(/ href="data[:]image/g, ' xlink:href="data:image');
 
       this.consoleLogRequestInfo(cacheKey, 'Rendered');
-      if (imageFormat == 'png') {
-        sharp(Buffer.from(svg)).toFormat('png').toBuffer((error, png) => {
-          if (error) {
-            this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
-            this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
-          } else {
-            this.consoleLogRequestInfo(cacheKey, 'Saving result to cache');
-            this.cache.set(cacheKey, png.toString('base64'));
-            this.returnImage(response, png, cacheKey, imageFormat);
-          }
-        });
+
+      if (imageFormat === 'png') {
+        sharp(Buffer.from(svg))
+          .toFormat('png')
+          .toBuffer((error, png) => {
+            if (error) {
+              this.consoleLogRequestError(
+                cacheKey,
+                `${error} (${equationFormat}: ${normalizedEquation})`,
+              );
+              this.returnError(
+                response,
+                `${equationFormat}: ${normalizedEquation}: ${error}`,
+                cacheKey,
+              );
+            } else {
+              this.consoleLogRequestInfo(cacheKey, 'Saving result to cache');
+              this.cache.set(cacheKey, png.toString('base64'));
+              this.returnImage(response, png, cacheKey, imageFormat);
+            }
+          });
       } else {
         this.consoleLogRequestInfo(cacheKey, 'Saving result to cache');
         this.cache.set(cacheKey, Buffer.from(svg).toString('base64'));
@@ -332,7 +344,7 @@ export default class MathToImageService {
       this.consoleLogRequestInfo(cacheKey, `${request.method}: ${requestUrl.substring(0, 512)}`);
       this.consoleLogRequestInfo(cacheKey, `${equationFormat}, original: ${equation.substring(0, 512)}`);
 
-      this.cache.get(cacheKey, (currentValue) => {
+      this.cache.get(cacheKey, async (currentValue) => {
         if (currentValue) {
           this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
           const image = new Buffer(currentValue, 'base64');
@@ -340,27 +352,33 @@ export default class MathToImageService {
         } else {
           let normalizedEquation = equation;
           let additionalImages = [];
-          if (equationFormat == 'TeX') {
+
+          if (equationFormat === 'TeX') {
             additionalImages = this.extractImages(normalizedEquation);
             normalizedEquation = this.cleanUpHtmlCharacters(normalizedEquation);
             normalizedEquation = this.cleanUpLatex(normalizedEquation);
             this.consoleLogRequestInfo(cacheKey, `ORIGINAL: ${normalizedEquation}`);
-            // normalizedEquation
-            normalizedEquation = this.mathjax.tex2mml(normalizedEquation);
-            normalizedEquation = normalizedEquation.replace(/<mrow>.*?<mo>&#x2318;<[/]mo>.*?<[/]mrow>/gs, '<mtext>&#x2318;</mtext>');
+
+            normalizedEquation = await this.mathjax.tex2mmlPromise(normalizedEquation);
+
+            normalizedEquation = normalizedEquation.replace(
+              /<mrow>.*?<mo>&#x2318;<[/]mo>.*?<[/]mrow>/gs,
+              '<mtext>&#x2318;</mtext>',
+            );
           }
-          this.downloadImages(normalizedEquation, cacheKey).then((normalizedEquation) => {
-            this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey).then((normalizedEquation) => {
-              normalizedEquation = normalizedEquation.trim();
-              this.consoleLogRequestInfo(cacheKey, `NORMALIZED: ${normalizedEquation}`);
-              this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
-              if (outputFormat == 'MathML') {
-                this.returnMathML(response, normalizedEquation);
-              } else {
-                this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
-              }
-            });
-          });
+
+          normalizedEquation = await this.downloadImages(normalizedEquation, cacheKey);
+          normalizedEquation = await this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey);
+
+          normalizedEquation = normalizedEquation.trim();
+          this.consoleLogRequestInfo(cacheKey, `NORMALIZED: ${normalizedEquation}`);
+          this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
+
+          if (outputFormat === 'MathML') {
+            this.returnMathML(response, normalizedEquation, cacheKey);
+          } else {
+            await this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
+          }
         }
       });
     } else {
