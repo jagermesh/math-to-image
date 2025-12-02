@@ -12,7 +12,9 @@ export default class Cache {
 
     if (this.config.redis) {
       this.config.redis.lifespanSeconds = parseDuration(this.config.redis.lifespan) / 1000;
-      const redisClient = redis.createClient(this.config.redis.connectString);
+      const redisClient = redis.createClient({
+        url: this.config.redis.connectString,
+      });
       redisClient.on('error', (error) => {
         this.application.consoleLogError(`Redis error: ${error.toString()}`);
       });
