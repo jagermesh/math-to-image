@@ -49,30 +49,42 @@ export default class MathToImageService {
   }
 
   cleanUpHtmlCharacters(html) {
-    const result = html.replace(/&gt;/g, '>')
+    if (typeof html !== 'string') {
+      return html;
+    }
+
+    return html
+      .replace(/&gt;/g, '>')
       .replace(/&lt;/g, '<')
       .replace(/&amp;/g, '&')
       .replace(/&quot;/g, '"')
       .replace(/&#039;/g, '\'');
-    return result;
   }
 
   async cleanUpMathML(mathml, additionalImages, cacheKey) {
+    if (typeof mathml !== 'string') {
+      return mathml;
+    }
+
     if (!/mstyle mathsize/i.test(mathml)) {
-      mathml = mathml.replace(/(<math[^>]*?>)/i, '$1<mstyle mathsize="16px">');
-      mathml = mathml.replace('</math>', '</mstyle></math>');
+      mathml = mathml
+        .replace(/(<math[^>]*?>)/i, '$1<mstyle mathsize="16px">')
+        .replace('</math>', '</mstyle></math>');
     }
 
     if (!/<math[^>]*?><mstyle[^>]*?><mtable[^>]*?>/i.test(mathml)) {
       if (/<math[^>]*?><mstyle[^>]*?>[ \n]*<mrow[^>]*?>/i.test(mathml) && /<[/]mrow><[/]mstyle><[/]math>/i.test(mathml)) {
-        mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable>');
-        mathml = mathml.replace('</mstyle></math>', '</mtable></mstyle></math>');
+        mathml = mathml
+          .replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable>')
+          .replace('</mstyle></math>', '</mtable></mstyle></math>');
       } else {
-        mathml = mathml.replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable><mrow>');
-        mathml = mathml.replace('</mstyle></math>', '</mrow></mtable></mstyle></math>');
+        mathml = mathml
+          .replace(/(<math[^>]*?><mstyle[^>]*?>)/i, '$1<mtable><mrow>')
+          .replace('</mstyle></math>', '</mrow></mtable></mstyle></math>');
       }
-      mathml = mathml.replace(/<mspace[ ]+linebreak="newline"[^>]*?>.*?<\/mspace>/ig, '</mrow><mrow>');
-      mathml = mathml.replace(/<mspace[ ]+linebreak="newline"[^>]*?\/>/ig, '</mrow><mrow>');
+      mathml = mathml
+        .replace(/<mspace[ ]+linebreak="newline"[^>]*?>.*?<\/mspace>/ig, '</mrow><mrow>')
+        .replace(/<mspace[ ]+linebreak="newline"[^>]*?\/>/ig, '</mrow><mrow>');
     }
 
     if (additionalImages) {
@@ -97,9 +109,39 @@ export default class MathToImageService {
     return mathml;
   }
 
+  sanitizeMathML(mathml) {
+    if (typeof mathml !== 'string') {
+      return mathml;
+    }
+
+    return mathml
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<span[^>]*>/gi, '')
+      .replace(/<\/span>/gi, '')
+      .replace(/<br\s*\/?>/gi, '<mspace linebreak="newline" />')
+      .replace(/(<mtd\b[^>]*>)(\s*[^<\s][^<]*?)(?=<)/gi, (match, openTag, text) => {
+        const trimmed = text.trim();
+        if (!trimmed) {
+          return match;
+        }
+        return `${openTag}<mtext>${trimmed}</mtext>`;
+      }).replace(/(<mspace\b[^>]*\/>)(\s*[^<\s][^<]*?)(?=<)/gi, (match, tag, text) => {
+        const trimmed = text.trim();
+        if (!trimmed) {
+          return match;
+        }
+        return `${tag}<mtext>${trimmed}</mtext>`;
+      });
+  }
+
   cleanUpLatex(html) {
-    // not supported
-    let result = html.replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
+    if (typeof html !== 'string') {
+      return html;
+    }
+
+    let result = html
+      .replace(/\\textcolor\{transparent\}\{\}/g, '\\\\')
       .replace(/\\textcolor\{transparent\}/g, '\\\\')
       .replace(/\\includegraphics\{.*?\}/g, '⌘')
       .replace(/\\fra\{/g, '\\frac{')
@@ -109,12 +151,15 @@ export default class MathToImageService {
       .replace(/\^\{ \}/g, '')
       .replace(/([0-9])\^$/g, '$1^?')
       .replace(/#/g, '\\#');
+
     while (/_\{_\{_\{_\{_\{/.test(result)) {
       result = result.replace(/_\{_\{_\{_\{_\{/g, '_{_{');
     }
+
     while (/\}\}\}\}\}/.test(result)) {
       result = result.replace(/\}\}\}\}\}/g, '}}');
     }
+
     return result;
   }
 
@@ -192,100 +237,18 @@ export default class MathToImageService {
     this.consoleLogRequestInfo(cacheKey, 'Request processed');
   }
 
-  mmlToSingleSvg(mml) {
-    const adaptor = this.mathjax.startup.adaptor;
-
-    const container = this.mathjax.mathml2svg(mml);
-
-    const children = adaptor.childNodes(container);
-    const svgNodes = children.filter((n) => adaptor.kind(n) === 'svg');
-
-    if (svgNodes.length === 0) {
-      throw new Error('No <svg> nodes found in MathJax output');
-    }
-
-    if (svgNodes.length === 1) {
-      return adaptor.outerHTML(svgNodes[0]);
-    }
-
-    const root = adaptor.node('svg', {
-      xmlns: 'http://www.w3.org/2000/svg',
-      'xmlns:xlink': 'http://www.w3.org/1999/xlink',
-    });
-
-    let xOffset = 0;
-    let maxHeight = 0;
-
-    const rootDefs = adaptor.node('defs', {});
-    let hasDefs = false;
-
-    for (const svg of svgNodes) {
-      const viewBox = adaptor.getAttribute(svg, 'viewBox') || '';
-      let width = 0;
-      let height = 0;
-
-      if (viewBox) {
-        const parts = viewBox.split(/\s+/).map(parseFloat);
-        width = parts[2] || 0;
-        height = parts[3] || 0;
-      } else {
-        width = parseFloat(adaptor.getAttribute(svg, 'width') || '0');
-        height = parseFloat(adaptor.getAttribute(svg, 'height') || '0');
-      }
-
-      if (height > maxHeight) {
-        maxHeight = height;
-      }
-
-      const inner = adaptor.childNodes(svg);
-      for (const child of inner) {
-        if (adaptor.kind(child) === 'defs') {
-          adaptor.append(rootDefs, child);
-          hasDefs = true;
-        }
-      }
-
-      const g = adaptor.node('g', {
-        transform: `translate(${xOffset}, 0)`,
-      });
-
-      for (const child of inner) {
-        if (adaptor.kind(child) === 'defs') {
-          continue;
-        }
-        adaptor.append(g, child);
-      }
-
-      adaptor.append(root, g);
-
-      xOffset += width;
-    }
-
-    if (hasDefs) {
-      adaptor.append(root, rootDefs);
-    }
-
-    adaptor.setAttribute(root, 'viewBox', `0 0 ${xOffset} ${maxHeight}`);
-    adaptor.setAttribute(root, 'width', `${xOffset}`);
-    adaptor.setAttribute(root, 'height', `${maxHeight}`);
-
-    let svgText = adaptor.outerHTML(root);
-
-    svgText =
-      `<?xml version="1.0" encoding="UTF-8"?>` +
-      `<!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>` +
-      svgText;
-
-    svgText = svgText.replace(/ href="data[:]image/g, ' xlink:href="data:image');
-
-    return svgText;
-  }
-
   async renderEquation(response, equationFormat, equation, cacheKey, imageFormat) {
-    const normalizedEquation = equation.trim();
+    let normalizedEquation = equation.trim();
 
     try {
-      const svgDocument = await this.mathjax.mathml2svgPromise(normalizedEquation);
+      let svgDocument;
+      try {
+        svgDocument = await this.mathjax.mathml2svgPromise(normalizedEquation);
+      } catch {
+        normalizedEquation = this.sanitizeMathML(normalizedEquation);
+        svgDocument = await this.mathjax.mathml2svgPromise(normalizedEquation);
+      }
+
       const adaptor = this.mathjax.startup.adaptor;
 
       let svg = adaptor.innerHTML(svgDocument);
@@ -371,6 +334,7 @@ export default class MathToImageService {
           normalizedEquation = await this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey);
 
           normalizedEquation = normalizedEquation.trim();
+
           this.consoleLogRequestInfo(cacheKey, `NORMALIZED: ${normalizedEquation}`);
           this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
 
@@ -382,7 +346,11 @@ export default class MathToImageService {
         }
       });
     } else {
-      if ((request.url.toString().length > 0) && (request.url.toString() != '/favicon.ico') && (request.url.toString() != '/')) {
+      if (
+        (request.url.toString().length > 0) &&
+        (request.url.toString() != '/favicon.ico') &&
+        (request.url.toString() != '/')
+      ) {
         this.consoleLogError(`Missing "equation" parameter (${request.url.toString()})`);
       }
       this.returnError(response, 'Missing "equation" parameter', 'emptyequation');
