@@ -168,10 +168,10 @@ export default class MathToImageService {
       axios.get(url, {
         responseType: 'arraybuffer',
       }).then((response) => {
-        if (response.status != 200) {
+        if (response.status !== 200) {
           return reject('Can not download image');
         }
-        return resolve(Buffer.from(response.data, 'binary').toString('base64'));
+        return resolve(Buffer.from(response.data).toString('base64'));
       }).catch((err) => {
         reject(err);
       });
@@ -211,7 +211,7 @@ export default class MathToImageService {
   }
 
   returnImage(response, responseBody, cacheKey, imageFormat) {
-    if (imageFormat == 'png') {
+    if (imageFormat === 'png') {
       response.writeHead(200, {
         'Content-Type': 'image/png',
       });
@@ -259,7 +259,7 @@ export default class MathToImageService {
         ${svg}
       `
         .trim()
-        .replace(/ href="data[:]image/g, ' xlink:href="data:image');
+        .replace(/ href="data:image/g, ' xlink:href="data:image');
 
       this.consoleLogRequestInfo(cacheKey, 'Rendered');
 
@@ -268,10 +268,10 @@ export default class MathToImageService {
           .toFormat('png')
           .toBuffer((error, png) => {
             if (error) {
-              this.consoleLogRequestError(
-                cacheKey,
-                `${error} (${equationFormat}: ${normalizedEquation})`,
-              );
+              // this.consoleLogRequestError(
+              //   cacheKey,
+              //   `${error} (${equationFormat}: ${normalizedEquation})`,
+              // );
               this.returnError(
                 response,
                 `${equationFormat}: ${normalizedEquation}: ${error}`,
@@ -289,7 +289,7 @@ export default class MathToImageService {
         this.returnImage(response, svg, cacheKey, imageFormat);
       }
     } catch (error) {
-      this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
+      // this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
       this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
     }
   }
@@ -308,48 +308,58 @@ export default class MathToImageService {
       this.consoleLogRequestInfo(cacheKey, `${equationFormat}, original: ${equation.substring(0, 512)}`);
 
       this.cache.get(cacheKey, async (currentValue) => {
-        if (currentValue) {
-          this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
-          const image = new Buffer(currentValue, 'base64');
-          this.returnImage(response, image, cacheKey, outputFormat);
-        } else {
-          let normalizedEquation = equation;
-          let additionalImages = [];
-
-          if (equationFormat === 'TeX') {
-            additionalImages = this.extractImages(normalizedEquation);
-            normalizedEquation = this.cleanUpHtmlCharacters(normalizedEquation);
-            normalizedEquation = this.cleanUpLatex(normalizedEquation);
-            this.consoleLogRequestInfo(cacheKey, `ORIGINAL: ${normalizedEquation}`);
-
-            normalizedEquation = await this.mathjax.tex2mmlPromise(normalizedEquation);
-
-            normalizedEquation = normalizedEquation.replace(
-              /<mrow>.*?<mo>&#x2318;<[/]mo>.*?<[/]mrow>/gs,
-              '<mtext>&#x2318;</mtext>',
-            );
-          }
-
-          normalizedEquation = await this.downloadImages(normalizedEquation, cacheKey);
-          normalizedEquation = await this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey);
-
-          normalizedEquation = normalizedEquation.trim();
-
-          this.consoleLogRequestInfo(cacheKey, `NORMALIZED: ${normalizedEquation}`);
-          this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
-
-          if (outputFormat === 'MathML') {
-            this.returnMathML(response, normalizedEquation, cacheKey);
+        try {
+          if (currentValue) {
+            this.consoleLogRequestInfo(cacheKey, 'Equation found in cache');
+            const image = Buffer.from(currentValue, 'base64');
+            this.returnImage(response, image, cacheKey, outputFormat);
           } else {
-            await this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
+            if (!this.mathjax) {
+              this.returnError(response, 'Service not initialized', cacheKey);
+              return;
+            }
+
+            let normalizedEquation = equation;
+            let additionalImages = [];
+
+            if (equationFormat === 'TeX') {
+              additionalImages = this.extractImages(normalizedEquation);
+              normalizedEquation = this.cleanUpHtmlCharacters(normalizedEquation);
+              normalizedEquation = this.cleanUpLatex(normalizedEquation);
+              this.consoleLogRequestInfo(cacheKey, `ORIGINAL: ${normalizedEquation}`);
+
+              normalizedEquation = await this.mathjax.tex2mmlPromise(normalizedEquation);
+
+              normalizedEquation = normalizedEquation.replace(
+                /<mrow>.*?<mo>&#x2318;<[/]mo>.*?<[/]mrow>/gs,
+                '<mtext>&#x2318;</mtext>',
+              );
+            }
+
+            normalizedEquation = await this.downloadImages(normalizedEquation, cacheKey);
+            normalizedEquation = await this.cleanUpMathML(normalizedEquation, additionalImages, cacheKey);
+
+            normalizedEquation = normalizedEquation.trim();
+
+            this.consoleLogRequestInfo(cacheKey, `NORMALIZED: ${normalizedEquation}`);
+            this.consoleLogRequestInfo(cacheKey, `MathML: ${normalizedEquation.substring(0, 512)}`);
+
+            if (outputFormat === 'MathML') {
+              this.returnMathML(response, normalizedEquation, cacheKey);
+            } else {
+              await this.renderEquation(response, equationFormat, normalizedEquation, cacheKey, outputFormat);
+            }
           }
+        } catch (error) {
+          // this.consoleLogRequestError(cacheKey, `Unexpected error: ${error}`);
+          this.returnError(response, `Unexpected error: ${error}`, cacheKey);
         }
       });
     } else {
       if (
         (request.url.toString().length > 0) &&
-        (request.url.toString() != '/favicon.ico') &&
-        (request.url.toString() != '/')
+        (request.url.toString() !== '/favicon.ico') &&
+        (request.url.toString() !== '/')
       ) {
         this.consoleLogError(`Missing "equation" parameter (${request.url.toString()})`);
       }
@@ -373,7 +383,7 @@ export default class MathToImageService {
 
     this.server = http.createServer();
     this.server.on('request', (request, response) => {
-      if (request.method == 'POST') {
+      if (request.method === 'POST') {
         let body = '';
         request.on('data', (chunk) => {
           body += chunk.toString();
