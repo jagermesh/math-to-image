@@ -39,13 +39,13 @@ export default class MathToImageService {
   }
 
   returnError(response, message, cacheKey, contentType = 'text/plain') {
+    this.consoleLogRequestError(cacheKey, message);
+
     response.writeHead(406, {
       'Content-Type': contentType,
     });
     response.write(message);
     response.end();
-
-    this.consoleLogRequestError(cacheKey, message);
   }
 
   cleanUpHtmlCharacters(html) {
@@ -268,10 +268,6 @@ export default class MathToImageService {
           .toFormat('png')
           .toBuffer((error, png) => {
             if (error) {
-              // this.consoleLogRequestError(
-              //   cacheKey,
-              //   `${error} (${equationFormat}: ${normalizedEquation})`,
-              // );
               this.returnError(
                 response,
                 `${equationFormat}: ${normalizedEquation}: ${error}`,
@@ -289,7 +285,6 @@ export default class MathToImageService {
         this.returnImage(response, svg, cacheKey, imageFormat);
       }
     } catch (error) {
-      // this.consoleLogRequestError(cacheKey, `${error} (${equationFormat}: ${normalizedEquation})`);
       this.returnError(response, `${equationFormat}: ${normalizedEquation}: ${error}`, cacheKey);
     }
   }
@@ -351,7 +346,6 @@ export default class MathToImageService {
             }
           }
         } catch (error) {
-          // this.consoleLogRequestError(cacheKey, `Unexpected error: ${error}`);
           this.returnError(response, `Unexpected error: ${error}`, cacheKey);
         }
       });
