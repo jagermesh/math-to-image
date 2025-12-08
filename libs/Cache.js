@@ -1,4 +1,4 @@
-import crypto from  'crypto';
+import crypto from 'crypto';
 import redis from 'redis';
 import parseDuration from 'parse-duration';
 
