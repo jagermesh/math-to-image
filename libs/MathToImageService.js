@@ -221,107 +221,109 @@ export default class MathToImageService {
           return match;
         }
         return `${openTag}<mtext>${trimmed}</mtext>`;
-      }).replace(/(<mspace\b[^>]*\/>)(\s*[^<\s][^<]*?)(?=<)/gi, (match, tag, text) => {
+      })
+      .replace(/(<mspace\b[^>]*\/>)(\s*[^<\s][^<]*?)(?=<)/gi, (match, tag, text) => {
         const trimmed = text.trim();
         if (!trimmed) {
           return match;
         }
         return `${tag}<mtext>${trimmed}</mtext>`;
-      }).replace(/<mtext>([\s\S]*?)<\/mtext>/gi, (match, text) => {
-        // Разбиваем очень длинный текст на несколько строк
-        // чтобы SVG не растягивался в бесконечную ширину
-        const MAX_LINE_LENGTH = 80;
-        if (!text || text.length <= MAX_LINE_LENGTH) {
-          return match;
-        }
-
-        // Разбиваем текст на строки по словам
-        const words = text.split(/(\s+)/);
-        const lines = [];
-        let currentLine = '';
-
-        for (const word of words) {
-          const trimmedWord = word.trim();
-          if (!trimmedWord) {
-            currentLine += word;
-            continue;
-          }
-
-          if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
-            lines.push(currentLine.trim());
-            currentLine = word;
-          } else {
-            currentLine += word;
-          }
-        }
-
-        if (currentLine.trim()) {
-          lines.push(currentLine.trim());
-        }
-
-        if (lines.length <= 1) {
-          return match;
-        }
-
-        // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
-        // Это должно работать лучше, чем <mspace>
-        return lines.map((line, idx) => {
-          if (idx === 0) {
-            return `<mtext>${line}</mtext>`;
-          }
-          return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
-        }).join('');
-      }).replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, text) => {
-        // Разбиваем очень длинный текст в <mi> элементах на несколько строк
-        // <mi> обычно для переменных, но иногда туда попадает обычный текст
-        const MAX_LINE_LENGTH = 80;
-        if (!text || text.length <= MAX_LINE_LENGTH) {
-          return match;
-        }
-
-        // Если текст содержит пробелы и выглядит как обычный текст, а не переменная
-        // (переменные обычно короткие и без пробелов)
-        if (!/\s/.test(text) || text.length < 20) {
-          return match;
-        }
-
-        // Разбиваем текст на строки по словам
-        const words = text.split(/(\s+)/);
-        const lines = [];
-        let currentLine = '';
-
-        for (const word of words) {
-          const trimmedWord = word.trim();
-          if (!trimmedWord) {
-            currentLine += word;
-            continue;
-          }
-
-          if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
-            lines.push(currentLine.trim());
-            currentLine = word;
-          } else {
-            currentLine += word;
-          }
-        }
-
-        if (currentLine.trim()) {
-          lines.push(currentLine.trim());
-        }
-
-        if (lines.length <= 1) {
-          return match;
-        }
-
-        // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
-        // Используем <mtext> вместо <mi> для длинного текста
-        return lines.map((line, idx) => {
-          if (idx === 0) {
-            return `<mtext>${line}</mtext>`;
-          }
-          return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
-        }).join('');
       })
+      // .replace(/<mtext>([\s\S]*?)<\/mtext>/gi, (match, text) => {
+      //   // Разбиваем очень длинный текст на несколько строк
+      //   // чтобы SVG не растягивался в бесконечную ширину
+      //   const MAX_LINE_LENGTH = 80;
+      //   if (!text || text.length <= MAX_LINE_LENGTH) {
+      //     return match;
+      //   }
+
+      //   // Разбиваем текст на строки по словам
+      //   const words = text.split(/(\s+)/);
+      //   const lines = [];
+      //   let currentLine = '';
+
+      //   for (const word of words) {
+      //     const trimmedWord = word.trim();
+      //     if (!trimmedWord) {
+      //       currentLine += word;
+      //       continue;
+      //     }
+
+      //     if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
+      //       lines.push(currentLine.trim());
+      //       currentLine = word;
+      //     } else {
+      //       currentLine += word;
+      //     }
+      //   }
+
+      //   if (currentLine.trim()) {
+      //     lines.push(currentLine.trim());
+      //   }
+
+      //   if (lines.length <= 1) {
+      //     return match;
+      //   }
+
+      //   // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
+      //   // Это должно работать лучше, чем <mspace>
+      //   return lines.map((line, idx) => {
+      //     if (idx === 0) {
+      //       return `<mtext>${line}</mtext>`;
+      //     }
+      //     return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
+      //   }).join('');
+      // }).replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, text) => {
+      //   // Разбиваем очень длинный текст в <mi> элементах на несколько строк
+      //   // <mi> обычно для переменных, но иногда туда попадает обычный текст
+      //   const MAX_LINE_LENGTH = 80;
+      //   if (!text || text.length <= MAX_LINE_LENGTH) {
+      //     return match;
+      //   }
+
+      //   // Если текст содержит пробелы и выглядит как обычный текст, а не переменная
+      //   // (переменные обычно короткие и без пробелов)
+      //   if (!/\s/.test(text) || text.length < 20) {
+      //     return match;
+      //   }
+
+      //   // Разбиваем текст на строки по словам
+      //   const words = text.split(/(\s+)/);
+      //   const lines = [];
+      //   let currentLine = '';
+
+      //   for (const word of words) {
+      //     const trimmedWord = word.trim();
+      //     if (!trimmedWord) {
+      //       currentLine += word;
+      //       continue;
+      //     }
+
+      //     if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
+      //       lines.push(currentLine.trim());
+      //       currentLine = word;
+      //     } else {
+      //       currentLine += word;
+      //     }
+      //   }
+
+      //   if (currentLine.trim()) {
+      //     lines.push(currentLine.trim());
+      //   }
+
+      //   if (lines.length <= 1) {
+      //     return match;
+      //   }
+
+      //   // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
+      //   // Используем <mtext> вместо <mi> для длинного текста
+      //   return lines.map((line, idx) => {
+      //     if (idx === 0) {
+      //       return `<mtext>${line}</mtext>`;
+      //     }
+      //     return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
+      //   }).join('');
+      // })
       // На всякий случай вырезаем любые оставшиеся теги <span> / </span>,
       // в том числе незакрытые, чтобы MathJax не видел HTML-элементов.
       .replace(/<\/?span\b[^>]*>/gi, '')
