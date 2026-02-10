@@ -151,6 +151,18 @@ export default class MathToImageService {
         }
         return cleaned;
       })
+      // Убираем все <font> элементы рекурсивно (включая вложенные)
+      // <font> не является частью MathML и должен быть удален
+      .replace(/<font[^>]*>([\s\S]*?)<\/font>/gi, (match, content) => {
+        // Рекурсивно убираем вложенные font
+        let cleaned = content;
+        let prevLength = 0;
+        while (cleaned.length !== prevLength) {
+          prevLength = cleaned.length;
+          cleaned = cleaned.replace(/<font[^>]*>([\s\S]*?)<\/font>/gi, '$1');
+        }
+        return cleaned;
+      })
       // Убираем все атрибуты style из элементов MathML
       .replace(/\s+style="[^"]*"/gi, '')
       .replace(/\s+style='[^']*'/gi, '')
@@ -308,6 +320,8 @@ export default class MathToImageService {
       // На всякий случай вырезаем любые оставшиеся теги <span> / </span>,
       // в том числе незакрытые, чтобы MathJax не видел HTML-элементов.
       .replace(/<\/?span\b[^>]*>/gi, '')
+      // Вырезаем любые оставшиеся теги <font> / </font>
+      .replace(/<\/?font\b[^>]*>/gi, '')
       // Убираем любые оставшиеся HTML-теги, которые не являются частью MathML
       .replace(/<\/?(div|p|br|span|b|i|u|strong|em|a|img|table|tr|td|th|thead|tbody|tfoot)\b[^>]*>/gi, '')
       // Убираем пустые <mrow> элементы, которые могли остаться после обработки
