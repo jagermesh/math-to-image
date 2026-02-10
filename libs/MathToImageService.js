@@ -112,6 +112,54 @@ export default class MathToImageService {
     return mathml;
   }
 
+  wordWrapText(text, match) {
+    // Разбиваем очень длинный текст на несколько строк
+    // чтобы SVG не растягивался в бесконечную ширину
+    const MAX_LINE_LENGTH = 80;
+    if (!text || text.length <= MAX_LINE_LENGTH) {
+      return match;
+    }
+
+    // Разбиваем текст на строки по словам
+    const words = text.split(/(\s+)/);
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const trimmedWord = word.trim();
+      if (!trimmedWord) {
+        currentLine += word;
+        continue;
+      }
+
+      if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
+        lines.push(currentLine.trim());
+        currentLine = word;
+      } else {
+        currentLine += word;
+      }
+    }
+
+    if (currentLine.trim()) {
+      lines.push(currentLine.trim());
+    }
+
+    if (lines.length <= 1) {
+      return match;
+    }
+
+    console.log(lines);
+
+    // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
+    // Это должно работать лучше, чем <mspace>
+    return lines.map((line, idx) => {
+      if (idx === 0) {
+        return `<mtext>${line}</mtext>`;
+      }
+      return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
+    }).join('');
+  }
+
   sanitizeMathML(mathml) {
     if (typeof mathml !== 'string') {
       return mathml;
@@ -142,69 +190,15 @@ export default class MathToImageService {
       .replace(/<hr\s*\/?[^>]*>/gi, ' ')
       // Убираем все <span> элементы рекурсивно (включая вложенные)
       // и заменяем их содержимым
-      .replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, (match, content) => {
-        // Рекурсивно убираем вложенные span
-        let cleaned = content;
-        let prevLength = 0;
-        while (cleaned.length !== prevLength) {
-          prevLength = cleaned.length;
-          cleaned = cleaned.replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, '$1');
-        }
-        return cleaned;
-      })
-      // Убираем все <font> элементы рекурсивно (включая вложенные)
-      // <font> не является частью MathML и должен быть удален
-      .replace(/<font[^>]*>([\s\S]*?)<\/font>/gi, (match, content) => {
-        // Рекурсивно убираем вложенные font
-        let cleaned = content;
-        let prevLength = 0;
-        while (cleaned.length !== prevLength) {
-          prevLength = cleaned.length;
-          cleaned = cleaned.replace(/<font[^>]*>([\s\S]*?)<\/font>/gi, '$1');
-        }
-        return cleaned;
-      })
-      // Убираем все атрибуты style из элементов MathML
-      .replace(/\s+style="[^"]*"/gi, '')
-      .replace(/\s+style='[^']*'/gi, '')
-      // Заменяем <div> на содержимое - убираем обертку, но сохраняем структуру
-      // Обрабатываем вложенные div рекурсивно
-      .replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, (match, content) => {
-        // Убираем вложенные div, заменяя их содержимое
-        let cleaned = content;
-        let prevLength = 0;
-        // Рекурсивно убираем все вложенные div
-        while (cleaned.length !== prevLength) {
-          prevLength = cleaned.length;
-          cleaned = cleaned.replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, '$1');
-        }
-        // Заменяем <br> на пробелы (переносы обработаем позже)
-        cleaned = cleaned.replace(/<br\s*\/?>/gi, ' ');
-        cleaned = cleaned.trim();
-        if (!cleaned) {
-          return '';
-        }
-        // Если внутри div есть MathML элементы (mrow, mi и т.д.), просто возвращаем их
-        // Если только текст, оборачиваем в mtext
-        if (/<m(row|i|o|n|text|space|table|tr|td)/i.test(cleaned)) {
-          return cleaned;
-        }
-        return `<mtext>${cleaned}</mtext>`;
-      })
-      // <mi> должен содержать только текст; если внутри один <mtext>, сплющиваем
-      .replace(/<mi([^>]*)>\s*<mtext>([\s\S]*?)<\/mtext>\s*<\/mi>/gi, (m, attrs, text) => `<mi${attrs}>${text}</mi>`)
-      // Обрабатываем <br> внутри <mi> элементов - заменяем на пробелы
-      // чтобы не ломать структуру MathML (делаем это до разбиения длинного текста)
-      .replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, text) => {
-        if (/<br\s*\/?>/i.test(text)) {
-          // Заменяем <br> на пробелы и нормализуем множественные пробелы
-          const cleaned = text.replace(/<br\s*\/?>/gi, ' ').replace(/\s+/g, ' ').trim();
-          return `<mi>${cleaned}</mi>`;
-        }
-        return match;
-      })
-      // Убираем "пустые" служебные строки вида
-      // <mtr ...><mtd ...><mrow ...><mi></mi></mrow></mtd></mtr>
+      .replace(/<\/?span\b[^>]*>/gi, '')
+      .replace(/<\/?font\b[^>]*>/gi, '')
+      // Убираем HTML-теги (div, p, span и т.д.). table/tr/td — отдельно, чтобы не резать mtable/mtr/mtd
+      .replace(/<\/?(div|p|br|span|b|i|u|strong|em|a|img)\b[^>]*>/gi, '')
+      // HTML-таблицы: удаляем только <table>, <tr>, <td>, <th>, не трогая MathML <mtable>, <mtr>, <mtd>
+      .replace(/<(?!m)(table|thead|tbody|tfoot|tr|td|th)\b[^>]*>/gi, '')
+      .replace(/<\/(?<!m)(table|thead|tbody|tfoot|tr|td|th)>/gi, '')
+      // Убираем пустые <mrow> элементы, которые могли остаться после обработки
+      .replace(/<mrow[^>]*>\s*<\/mrow>/gi, '')
       .replace(/<mtr\b[^>]*>\s*<mtd\b[^>]*>\s*<mrow[^>]*>\s*<mi>\s*<\/mi>\s*<\/mrow>\s*<\/mtd>\s*<\/mtr>/gi, '')
       .replace(/<mtr\b[^>]*>\s*<mtd\b[^>]*>\s*<mrow[^>]*>\s*<mspace[^>]*>\s*<\/mspace>\s*<\/mrow>\s*<\/mtd>\s*<\/mtr>/gi, '')
       .replace(/<mtr\b[^>]*>\s*<mtd\b[^>]*>\s*<\/mtd>\s*<\/mtr>/gi, '')
@@ -215,6 +209,14 @@ export default class MathToImageService {
       // Убираем пустые <mrow></mrow> элементы
       .replace(/<mrow[^>]*>\s*<\/mrow>/gi, '')
       .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<mspace[^>]><\/mspace>/gi, ' ')
+      // Убираем все атрибуты style из элементов MathML
+      .replace(/\s+style="[^"]*"/gi, '')
+      .replace(/\s+style='[^']*'/gi, '')
+      // <mi> должен содержать только текст; если внутри один <mtext>, сплющиваем
+      .replace(/<mi([^>]*)>\s*<mtext>([\s\S]*?)<\/mtext>\s*<\/mi>/gi, (m, attrs, text) => `<mi${attrs}>${text}</mi>`)
+      // чтобы не ломать структуру MathML (делаем это до разбиения длинного текста)
+      // <mtr ...><mtd ...><mrow ...><mi></mi></mrow></mtd></mtr>
       .replace(/(<mtd\b[^>]*>)(\s*[^<\s][^<]*?)(?=<)/gi, (match, openTag, text) => {
         const trimmed = text.trim();
         if (!trimmed) {
@@ -229,113 +231,12 @@ export default class MathToImageService {
         }
         return `${tag}<mtext>${trimmed}</mtext>`;
       })
-      // .replace(/<mtext>([\s\S]*?)<\/mtext>/gi, (match, text) => {
-      //   // Разбиваем очень длинный текст на несколько строк
-      //   // чтобы SVG не растягивался в бесконечную ширину
-      //   const MAX_LINE_LENGTH = 80;
-      //   if (!text || text.length <= MAX_LINE_LENGTH) {
-      //     return match;
-      //   }
-
-      //   // Разбиваем текст на строки по словам
-      //   const words = text.split(/(\s+)/);
-      //   const lines = [];
-      //   let currentLine = '';
-
-      //   for (const word of words) {
-      //     const trimmedWord = word.trim();
-      //     if (!trimmedWord) {
-      //       currentLine += word;
-      //       continue;
-      //     }
-
-      //     if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
-      //       lines.push(currentLine.trim());
-      //       currentLine = word;
-      //     } else {
-      //       currentLine += word;
-      //     }
-      //   }
-
-      //   if (currentLine.trim()) {
-      //     lines.push(currentLine.trim());
-      //   }
-
-      //   if (lines.length <= 1) {
-      //     return match;
-      //   }
-
-      //   // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
-      //   // Это должно работать лучше, чем <mspace>
-      //   return lines.map((line, idx) => {
-      //     if (idx === 0) {
-      //       return `<mtext>${line}</mtext>`;
-      //     }
-      //     return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
-      //   }).join('');
-      // }).replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, text) => {
-      //   // Разбиваем очень длинный текст в <mi> элементах на несколько строк
-      //   // <mi> обычно для переменных, но иногда туда попадает обычный текст
-      //   const MAX_LINE_LENGTH = 80;
-      //   if (!text || text.length <= MAX_LINE_LENGTH) {
-      //     return match;
-      //   }
-
-      //   // Если текст содержит пробелы и выглядит как обычный текст, а не переменная
-      //   // (переменные обычно короткие и без пробелов)
-      //   if (!/\s/.test(text) || text.length < 20) {
-      //     return match;
-      //   }
-
-      //   // Разбиваем текст на строки по словам
-      //   const words = text.split(/(\s+)/);
-      //   const lines = [];
-      //   let currentLine = '';
-
-      //   for (const word of words) {
-      //     const trimmedWord = word.trim();
-      //     if (!trimmedWord) {
-      //       currentLine += word;
-      //       continue;
-      //     }
-
-      //     if (currentLine.length + trimmedWord.length > MAX_LINE_LENGTH && currentLine.trim()) {
-      //       lines.push(currentLine.trim());
-      //       currentLine = word;
-      //     } else {
-      //       currentLine += word;
-      //     }
-      //   }
-
-      //   if (currentLine.trim()) {
-      //     lines.push(currentLine.trim());
-      //   }
-
-      //   if (lines.length <= 1) {
-      //     return match;
-      //   }
-
-      //   // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
-      //   // Используем <mtext> вместо <mi> для длинного текста
-      //   return lines.map((line, idx) => {
-      //     if (idx === 0) {
-      //       return `<mtext>${line}</mtext>`;
-      //     }
-      //     return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
-      //   }).join('');
-      // })
-      // На всякий случай вырезаем любые оставшиеся теги <span> / </span>,
-      // в том числе незакрытые, чтобы MathJax не видел HTML-элементов.
-      .replace(/<\/?span\b[^>]*>/gi, '')
-      // Вырезаем любые оставшиеся теги <font> / </font>
-      .replace(/<\/?font\b[^>]*>/gi, '')
-      // Убираем HTML-теги (div, p, span и т.д.). table/tr/td — отдельно, чтобы не резать mtable/mtr/mtd
-      .replace(/<\/?(div|p|br|span|b|i|u|strong|em|a|img)\b[^>]*>/gi, '')
-      // HTML-таблицы: удаляем только <table>, <tr>, <td>, <th>, не трогая MathML <mtable>, <mtr>, <mtd>
-      .replace(/<(?!m)(table|thead|tbody|tfoot|tr|td|th)\b[^>]*>/gi, '')
-      .replace(/<\/(?<!m)(table|thead|tbody|tfoot|tr|td|th)>/gi, '')
-      // Убираем пустые <mrow> элементы, которые могли остаться после обработки
-      .replace(/<mrow[^>]*>\s*<\/mrow>/gi, '');
+      .replace(/<mtext>([\s\S]*?)<\/mtext>/gi, (match, text) => {
+        return this.wordWrapText(text, match);
+      }).replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, text) => {
+        return this.wordWrapText(text, match);
+      })
+      ;
   }
 
   cleanUpLatex(html) {
