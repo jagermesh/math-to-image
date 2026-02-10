@@ -112,15 +112,18 @@ export default class MathToImageService {
     return mathml;
   }
 
-  wordWrapText(text, match) {
-    // Разбиваем очень длинный текст на несколько строк
-    // чтобы SVG не растягивался в бесконечную ширину
+  /** Разбивает строку на сегменты: куски без тегов и сами теги (в порядке появления). */
+  splitByTags(content) {
+    return content.split(/(<[^>]+>)/);
+  }
+
+  /** Перенос по словам только для строки без тегов. Возвращает разметку (один или несколько <mtext> + <mo>). */
+  wordWrapPlainText(text) {
     const MAX_LINE_LENGTH = 80;
     if (!text || text.length <= MAX_LINE_LENGTH) {
-      return match;
+      return `<mtext>${text}</mtext>`;
     }
 
-    // Разбиваем текст на строки по словам
     const words = text.split(/(\s+)/);
     const lines = [];
     let currentLine = '';
@@ -145,19 +148,29 @@ export default class MathToImageService {
     }
 
     if (lines.length <= 1) {
-      return match;
+      return `<mtext>${text}</mtext>`;
     }
 
-    console.log(lines);
-
-    // Разбиваем на несколько <mtext> элементов, разделенных <mo linebreak="newline">
-    // Это должно работать лучше, чем <mspace>
     return lines.map((line, idx) => {
       if (idx === 0) {
         return `<mtext>${line}</mtext>`;
       }
       return `<mo linebreak="newline"></mo><mtext>${line}</mtext>`;
     }).join('');
+  }
+
+  /** Оборачивает содержимое mtext/mi: находит только блоки без тегов и применяет к ним wordWrap. */
+  wordWrapText(content, match) {
+    const segments = this.splitByTags(content);
+    const result = segments.map((seg) => {
+      // Сегмент — тег: оставляем как есть
+      if (/^<[^>]+>$/.test(seg)) {
+        return seg;
+      }
+      // Сегмент — текст без тегов: перенос по словам
+      return this.wordWrapPlainText(seg);
+    }).join('');
+    return result || match;
   }
 
   sanitizeMathML(mathml) {
@@ -178,7 +191,7 @@ export default class MathToImageService {
       return mathml;
     }
 
-    return mathml
+    mathml = mathml
       // нормализуем неразрывные пробелы
       .replace(/\u00A0/g, ' ')
       .replace(/&nbsp;/gi, ' ')
@@ -209,7 +222,8 @@ export default class MathToImageService {
       // Убираем пустые <mrow></mrow> элементы
       .replace(/<mrow[^>]*>\s*<\/mrow>/gi, '')
       .replace(/<br\s*\/?>/gi, ' ')
-      .replace(/<mspace[^>]><\/mspace>/gi, ' ')
+      // Заменяем <mspace> с небольшой шириной на пробел
+      .replace(/<mspace[^>]*><\/mspace>/gi, ' ')
       // Убираем все атрибуты style из элементов MathML
       .replace(/\s+style="[^"]*"/gi, '')
       .replace(/\s+style='[^']*'/gi, '')
@@ -230,6 +244,38 @@ export default class MathToImageService {
           return match;
         }
         return `${tag}<mtext>${trimmed}</mtext>`;
+      });
+
+    console.log(mathml);
+
+    return mathml
+      // Объединяем последовательные <mi> элементы в один <mtext>
+      // Это нужно для случаев, когда текст разбит на множество отдельных <mi>
+      .replace(/(<mi[^>]*>([\s\S]*?)<\/mi>(\s*<mo[^>]*>([\s\S]*?)<\/mo>)?\s*){3,}/gi, (match) => {
+        // Находим все <mi> и <mo> в правильном порядке
+        const allElements = [];
+        let regex = /<(mi|mo)[^>]*>([\s\S]*?)<\/(mi|mo)>/gi;
+        let m;
+        while ((m = regex.exec(match)) !== null) {
+          allElements.push({
+            type: m[1],
+            text: m[2].trim(),
+            index: m.index
+          });
+        }
+        
+        // Собираем объединенный текст
+        const combined = allElements.map((el, idx) => {
+          const text = el.text;
+          // Если это <mo> с пунктуацией, добавляем без пробела
+          if (el.type === 'mo' && /^[.,;:!?\-—–]$/.test(text)) {
+            return text;
+          }
+          // Для <mi> добавляем пробел после (кроме последнего)
+          return text + (idx < allElements.length - 1 ? ' ' : '');
+        }).join('').trim();
+        
+        return `<mtext>${combined}</mtext>`;
       })
       .replace(/<mtext>([\s\S]*?)<\/mtext>/gi, (match, text) => {
         return this.wordWrapText(text, match);
