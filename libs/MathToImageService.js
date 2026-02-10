@@ -190,6 +190,8 @@ export default class MathToImageService {
         }
         return `<mtext>${cleaned}</mtext>`;
       })
+      // <mi> должен содержать только текст; если внутри один <mtext>, сплющиваем
+      .replace(/<mi([^>]*)>\s*<mtext>([\s\S]*?)<\/mtext>\s*<\/mi>/gi, (m, attrs, text) => `<mi${attrs}>${text}</mi>`)
       // Обрабатываем <br> внутри <mi> элементов - заменяем на пробелы
       // чтобы не ломать структуру MathML (делаем это до разбиения длинного текста)
       .replace(/<mi>([\s\S]*?)<\/mi>/gi, (match, text) => {
@@ -205,8 +207,10 @@ export default class MathToImageService {
       .replace(/<mtr\b[^>]*>\s*<mtd\b[^>]*>\s*<mrow[^>]*>\s*<mi>\s*<\/mi>\s*<\/mrow>\s*<\/mtd>\s*<\/mtr>/gi, '')
       .replace(/<mtr\b[^>]*>\s*<mtd\b[^>]*>\s*<mrow[^>]*>\s*<mspace[^>]*>\s*<\/mspace>\s*<\/mrow>\s*<\/mtd>\s*<\/mtr>/gi, '')
       .replace(/<mtr\b[^>]*>\s*<mtd\b[^>]*>\s*<\/mtd>\s*<\/mtr>/gi, '')
-      // Убираем пустые <mi></mi> элементы
-      .replace(/<mi>\s*<\/mi>/gi, '')
+      // Убираем пустые <mi></mi>, <mo></mo>, <mn></mn> — они ломают дерево MathJax (children)
+      .replace(/<mi[^>]*>\s*<\/mi>/gi, '')
+      .replace(/<mo[^>]*>\s*<\/mo>/gi, '')
+      .replace(/<mn[^>]*>\s*<\/mn>/gi, '')
       // Убираем пустые <mrow></mrow> элементы
       .replace(/<mrow[^>]*>\s*<\/mrow>/gi, '')
       .replace(/<br\s*\/?>/gi, ' ')
