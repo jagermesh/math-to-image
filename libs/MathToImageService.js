@@ -139,6 +139,7 @@ export default class MathToImageService {
       // Убираем все HTML элементы, которые не являются частью MathML
       .replace(/<p[^>]*>/gi, '')
       .replace(/<\/p>/gi, ' ')
+      .replace(/<hr\s*\/?[^>]*>/gi, ' ')
       // Убираем все <span> элементы рекурсивно (включая вложенные)
       // и заменяем их содержимым
       .replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, (match, content) => {
@@ -326,8 +327,11 @@ export default class MathToImageService {
       .replace(/<\/?span\b[^>]*>/gi, '')
       // Вырезаем любые оставшиеся теги <font> / </font>
       .replace(/<\/?font\b[^>]*>/gi, '')
-      // Убираем любые оставшиеся HTML-теги, которые не являются частью MathML
-      .replace(/<\/?(div|p|br|span|b|i|u|strong|em|a|img|table|tr|td|th|thead|tbody|tfoot)\b[^>]*>/gi, '')
+      // Убираем HTML-теги (div, p, span и т.д.). table/tr/td — отдельно, чтобы не резать mtable/mtr/mtd
+      .replace(/<\/?(div|p|br|span|b|i|u|strong|em|a|img)\b[^>]*>/gi, '')
+      // HTML-таблицы: удаляем только <table>, <tr>, <td>, <th>, не трогая MathML <mtable>, <mtr>, <mtd>
+      .replace(/<(?!m)(table|thead|tbody|tfoot|tr|td|th)\b[^>]*>/gi, '')
+      .replace(/<\/(?<!m)(table|thead|tbody|tfoot|tr|td|th)>/gi, '')
       // Убираем пустые <mrow> элементы, которые могли остаться после обработки
       .replace(/<mrow[^>]*>\s*<\/mrow>/gi, '');
   }
