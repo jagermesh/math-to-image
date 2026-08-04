@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import redis from 'redis';
+import { createClient } from 'redis';
 import parseDuration from 'parse-duration';
 
 export default class Cache {
@@ -12,7 +12,7 @@ export default class Cache {
 
     if (this.config.redis) {
       this.config.redis.lifespanSeconds = parseDuration(this.config.redis.lifespan) / 1000;
-      const redisClient = redis.createClient({
+      const redisClient = createClient({
         url: this.config.redis.connectString,
       });
       redisClient.on('error', (error) => {
